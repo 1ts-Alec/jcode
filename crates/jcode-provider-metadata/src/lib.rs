@@ -407,7 +407,7 @@ pub const OLLAMA_CLOUD_PROFILE: OpenAiCompatibleProfile = OpenAiCompatibleProfil
     api_key_env: "OLLAMA_API_KEY",
     env_file: "ollama-cloud.env",
     setup_url: "https://ollama.com/",
-    default_model: None,
+    default_model: Some("kimi-k2.6:cloud"),
     requires_api_key: true,
 };
 

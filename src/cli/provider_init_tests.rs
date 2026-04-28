@@ -57,6 +57,24 @@ fn test_provider_choice_arg_values() {
 }
 
 #[test]
+fn ollama_cloud_login_provider_round_trips_to_provider_choice() {
+    assert_eq!(
+        choice_for_login_provider(provider_catalog::OLLAMA_CLOUD_LOGIN_PROVIDER),
+        Some(ProviderChoice::OllamaCloud)
+    );
+}
+
+#[test]
+fn ollama_cloud_profile_has_valid_runtime_defaults() {
+    let resolved = resolve_openai_compatible_profile(provider_catalog::OLLAMA_CLOUD_PROFILE);
+    assert_eq!(resolved.api_base, "https://ollama.com/v1");
+    assert_eq!(resolved.api_key_env, "OLLAMA_API_KEY");
+    assert_eq!(resolved.env_file, "ollama-cloud.env");
+    assert_eq!(resolved.default_model.as_deref(), Some("kimi-k2.6:cloud"));
+    assert!(resolved.requires_api_key);
+}
+
+#[test]
 fn test_server_bootstrap_login_selection_preserves_order() {
     let providers = provider_catalog::server_bootstrap_login_providers();
     assert_eq!(

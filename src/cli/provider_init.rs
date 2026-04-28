@@ -269,6 +269,7 @@ pub fn choice_for_login_provider(provider: LoginProviderDescriptor) -> Option<Pr
             ProviderChoice::Xai,
             ProviderChoice::Lmstudio,
             ProviderChoice::Ollama,
+            ProviderChoice::OllamaCloud,
             ProviderChoice::Chutes,
             ProviderChoice::Cerebras,
             ProviderChoice::AlibabaCodingPlan,
