@@ -295,7 +295,7 @@ pub(super) fn draw_help_overlay(frame: &mut Frame, area: Rect, scroll: usize, ap
         "/debug-visual",
         "Enable visual debugging for TUI issues",
     ));
-    lines.push(help_entry("/quit", "Exit jcode"));
+    lines.push(help_entry("/quit, /exit", "Exit jcode"));
 
     let skills = app.available_skills();
     if !skills.is_empty() {

@@ -1037,6 +1037,19 @@ pub(super) fn handle_session_command(app: &mut App, trimmed: &str) -> bool {
         return true;
     }
 
+    if trimmed == "/quit" || trimmed == "/exit" {
+        crate::telemetry::end_session_with_reason(
+            app.provider.name(),
+            &app.provider.model(),
+            crate::telemetry::SessionEndReason::NormalExit,
+        );
+        app.session.provider_session_id = app.provider_session_id.clone();
+        app.session.mark_closed();
+        let _ = app.session.save();
+        app.should_quit = true;
+        return true;
+    }
+
     if trimmed == "/save" || trimmed.starts_with("/save ") {
         let label = trimmed.strip_prefix("/save").unwrap_or_default().trim();
         let label = if label.is_empty() {

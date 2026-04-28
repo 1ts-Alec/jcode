@@ -130,7 +130,7 @@ impl App {
             }
             "version" => "`/version`\nShow jcode version/build details.",
             "changelog" => "`/changelog`\nShow recent changes embedded in this build.",
-            "quit" => "`/quit`\nExit jcode.",
+            "quit" | "exit" => "`/quit`\nExit jcode.\n\n`/exit`\nAlias for `/quit`.",
             "config" => {
                 "`/config`\nShow active configuration.\n\n`/config init`\nCreate default config file.\n\n`/config edit`\nOpen config in `$EDITOR`."
             }
