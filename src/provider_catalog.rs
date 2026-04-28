@@ -119,6 +119,9 @@ pub fn apply_openai_compatible_profile_env(profile: Option<OpenAiCompatibleProfi
         crate::env::set_var("JCODE_OPENROUTER_ENV_FILE", &resolved.env_file);
         crate::env::set_var("JCODE_OPENROUTER_CACHE_NAMESPACE", &resolved.id);
         crate::env::set_var("JCODE_OPENROUTER_PROVIDER_FEATURES", "0");
+        if let Some(model) = resolved.default_model.as_deref() {
+            crate::env::set_var("JCODE_OPENROUTER_MODEL", model);
+        }
         if resolved.requires_api_key {
             crate::env::remove_var("JCODE_OPENROUTER_ALLOW_NO_AUTH");
         } else {

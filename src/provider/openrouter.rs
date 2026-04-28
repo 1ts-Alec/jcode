@@ -545,6 +545,26 @@ impl OpenRouterProvider {
         self.supports_provider_features
     }
 
+    pub(crate) fn compatible_provider_display_name(&self) -> &'static str {
+        if self.supports_provider_features {
+            return "OpenRouter";
+        }
+
+        crate::provider_catalog::openai_compatible_profiles()
+            .iter()
+            .find_map(|profile| {
+                let resolved = crate::provider_catalog::resolve_openai_compatible_profile(*profile);
+                if normalize_api_base(&resolved.api_base).as_deref()
+                    == normalize_api_base(&self.api_base).as_deref()
+                {
+                    Some(profile.display_name)
+                } else {
+                    None
+                }
+            })
+            .unwrap_or("OpenAI-compatible")
+    }
+
     pub fn new_named_openai_compatible(
         profile_name: &str,
         profile: &crate::config::NamedProviderConfig,

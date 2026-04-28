@@ -2,8 +2,8 @@ use anyhow::Result;
 use jcode::auth::{AuthState, AuthStatus};
 use jcode::provider::openrouter::OpenRouterProvider;
 use jcode::provider_catalog::{
-    OPENAI_COMPAT_PROFILE, apply_openai_compatible_profile_env, openai_compatible_profiles,
-    resolve_openai_compatible_profile,
+    OLLAMA_CLOUD_PROFILE, OPENAI_COMPAT_PROFILE, apply_openai_compatible_profile_env,
+    openai_compatible_profiles, resolve_openai_compatible_profile,
 };
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -195,6 +195,33 @@ fn provider_matrix_file_credentials_activate_openrouter_runtime() -> Result<()> 
 
         std::fs::remove_file(env_file)?;
     }
+
+    Ok(())
+}
+
+#[test]
+fn ollama_cloud_profile_appears_by_name_in_model_routes() -> Result<()> {
+    let env = TestEnv::new()?;
+    env.clear_profile_keys();
+
+    apply_openai_compatible_profile_env(Some(OLLAMA_CLOUD_PROFILE));
+    let resolved = resolve_openai_compatible_profile(OLLAMA_CLOUD_PROFILE);
+    assert_eq!(
+        std::env::var("JCODE_OPENROUTER_MODEL").ok().as_deref(),
+        Some("kimi-k2.6:cloud")
+    );
+    jcode::env::set_var(&resolved.api_key_env, "matrix-env-secret");
+    jcode::auth::AuthStatus::invalidate_cache();
+
+    let provider = jcode::provider::MultiProvider::new();
+    let routes = jcode::provider::Provider::model_routes(&provider);
+    assert!(
+        routes.iter().any(|route| route.model == "kimi-k2.6:cloud"
+            && route.provider == "Ollama Cloud"
+            && route.available),
+        "expected Ollama Cloud default model route in {:?}",
+        routes
+    );
 
     Ok(())
 }

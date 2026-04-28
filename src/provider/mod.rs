@@ -1319,9 +1319,10 @@ impl Provider for MultiProvider {
                         auto_detail,
                     ));
                 } else {
+                    let provider_label = openrouter.compatible_provider_display_name().to_string();
                     routes.push(ModelRoute {
                         model: model.clone(),
-                        provider: "OpenAI-compatible".to_string(),
+                        provider: provider_label,
                         api_method: "openai-compatible".to_string(),
                         available: has_openrouter,
                         detail: "custom endpoint".to_string(),
