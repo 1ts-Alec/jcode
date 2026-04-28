@@ -400,6 +400,17 @@ pub const OLLAMA_PROFILE: OpenAiCompatibleProfile = OpenAiCompatibleProfile {
     requires_api_key: false,
 };
 
+pub const OLLAMA_CLOUD_PROFILE: OpenAiCompatibleProfile = OpenAiCompatibleProfile {
+    id: "ollama-cloud",
+    display_name: "Ollama Cloud",
+    api_base: "https://ollama.com/v1",
+    api_key_env: "OLLAMA_API_KEY",
+    env_file: "ollama-cloud.env",
+    setup_url: "https://ollama.com/",
+    default_model: None,
+    requires_api_key: true,
+};
+
 pub const CHUTES_PROFILE: OpenAiCompatibleProfile = OpenAiCompatibleProfile {
     id: "chutes",
     display_name: "Chutes",
@@ -444,7 +455,7 @@ pub const OPENAI_COMPAT_PROFILE: OpenAiCompatibleProfile = OpenAiCompatibleProfi
     requires_api_key: true,
 };
 
-const OPENAI_COMPAT_PROFILES: [OpenAiCompatibleProfile; 28] = [
+const OPENAI_COMPAT_PROFILES: [OpenAiCompatibleProfile; 29] = [
     OPENCODE_PROFILE,
     OPENCODE_GO_PROFILE,
     ZAI_PROFILE,
@@ -472,6 +483,7 @@ const OPENAI_COMPAT_PROFILES: [OpenAiCompatibleProfile; 28] = [
     XAI_PROFILE,
     LMSTUDIO_PROFILE,
     OLLAMA_PROFILE,
+    OLLAMA_CLOUD_PROFILE,
     OPENAI_COMPAT_PROFILE,
 ];
 
@@ -910,6 +922,19 @@ pub const OLLAMA_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescript
     order: LoginProviderSurfaceOrder::new(Some(35), Some(35), Some(35), Some(35), Some(35)),
 };
 
+pub const OLLAMA_CLOUD_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
+    id: "ollama-cloud",
+    display_name: "Ollama Cloud",
+    auth_kind: LoginProviderAuthKind::ApiKey,
+    auth_state_key: LoginProviderAuthStateKey::OpenRouterLike,
+    auth_status_method: "API key",
+    aliases: &["ollama-cloud-api", "ollama.com"],
+    menu_detail: "API key, hosted OpenAI-compatible endpoint",
+    recommended: false,
+    target: LoginProviderTarget::OpenAiCompatible(OLLAMA_CLOUD_PROFILE),
+    order: LoginProviderSurfaceOrder::new(Some(36), Some(36), Some(36), Some(36), Some(36)),
+};
+
 pub const OPENAI_COMPAT_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescriptor {
     id: "openai-compatible",
     display_name: "OpenAI-compatible",
@@ -988,7 +1013,7 @@ pub const GOOGLE_LOGIN_PROVIDER: LoginProviderDescriptor = LoginProviderDescript
     order: LoginProviderSurfaceOrder::new(Some(13), None, None, None, None),
 };
 
-const LOGIN_PROVIDERS: [LoginProviderDescriptor; 39] = [
+const LOGIN_PROVIDERS: [LoginProviderDescriptor; 40] = [
     AUTO_IMPORT_LOGIN_PROVIDER,
     CLAUDE_LOGIN_PROVIDER,
     OPENAI_LOGIN_PROVIDER,
@@ -1022,6 +1047,7 @@ const LOGIN_PROVIDERS: [LoginProviderDescriptor; 39] = [
     XAI_LOGIN_PROVIDER,
     LMSTUDIO_LOGIN_PROVIDER,
     OLLAMA_LOGIN_PROVIDER,
+    OLLAMA_CLOUD_LOGIN_PROVIDER,
     OPENAI_COMPAT_LOGIN_PROVIDER,
     CURSOR_LOGIN_PROVIDER,
     COPILOT_LOGIN_PROVIDER,
@@ -1301,6 +1327,10 @@ mod tests {
         assert_eq!(
             resolve_login_provider("lm-studio").map(|provider| provider.id),
             Some("lmstudio")
+        );
+        assert_eq!(
+            resolve_login_provider("ollama.com").map(|provider| provider.id),
+            Some("ollama-cloud")
         );
         assert_eq!(
             resolve_login_provider("gmail").map(|provider| provider.id),

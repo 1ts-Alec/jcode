@@ -76,6 +76,76 @@ const CACHE_PIN_TTL_SECS: u64 = 60 * 60;
 const ENDPOINTS_CACHE_TTL_SECS: u64 = 60 * 60;
 const MAX_BACKGROUND_ENDPOINT_REFRESHES: usize = 8;
 
+fn is_ollama_cloud_api_base(api_base: &str) -> bool {
+    api_base.trim_end_matches('/') == "https://ollama.com/v1"
+}
+
+fn parse_models_dev_context_lengths(data: &Value, provider_id: &str) -> HashMap<String, u64> {
+    let Some(models) = data
+        .get(provider_id)
+        .and_then(|provider| provider.get("models"))
+        .and_then(|models| models.as_object())
+    else {
+        return HashMap::new();
+    };
+
+    models
+        .iter()
+        .filter_map(|(fallback_id, model)| {
+            let id = model
+                .get("id")
+                .and_then(|value| value.as_str())
+                .unwrap_or(fallback_id)
+                .to_string();
+            let context = model
+                .get("limit")
+                .and_then(|limit| limit.get("context"))
+                .and_then(|value| value.as_u64())?;
+            if id.trim().is_empty() || context == 0 {
+                None
+            } else {
+                Some((id, context))
+            }
+        })
+        .collect()
+}
+
+async fn fetch_models_dev_context_lengths(
+    client: &Client,
+    provider_id: &str,
+) -> Result<HashMap<String, u64>> {
+    let response = client
+        .get("https://models.dev/api.json")
+        .header("User-Agent", "jcode")
+        .send()
+        .await
+        .context("Failed to fetch model metadata from models.dev")?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = crate::util::http_error_body(response, "HTTP error").await;
+        anyhow::bail!("models.dev metadata API error ({}): {}", status, body);
+    }
+
+    let data: Value = response
+        .json()
+        .await
+        .context("Failed to parse models.dev metadata response")?;
+    Ok(parse_models_dev_context_lengths(&data, provider_id))
+}
+
+async fn enrich_ollama_cloud_model_metadata(client: &Client, models: &mut [ModelInfo]) {
+    let Ok(context_lengths) = fetch_models_dev_context_lengths(client, "ollama-cloud").await else {
+        return;
+    };
+
+    for model in models {
+        if let Some(context_length) = context_lengths.get(&model.id).copied() {
+            model.context_length = Some(context_length);
+        }
+    }
+}
+
 fn explicit_openrouter_runtime_configured() -> bool {
     [
         "JCODE_OPENROUTER_API_BASE",
@@ -402,10 +472,14 @@ async fn fetch_models_from_api(
         data: Vec<ModelInfo>,
     }
 
-    let models_response: ModelsResponse = response
+    let mut models_response: ModelsResponse = response
         .json()
         .await
         .context("Failed to parse models response")?;
+
+    if is_ollama_cloud_api_base(&api_base) {
+        enrich_ollama_cloud_model_metadata(&client, &mut models_response.data).await;
+    }
 
     save_disk_cache(&models_response.data);
 

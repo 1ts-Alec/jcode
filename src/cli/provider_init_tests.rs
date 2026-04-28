@@ -37,6 +37,7 @@ fn test_provider_choice_arg_values() {
     assert_eq!(ProviderChoice::Xai.as_arg_value(), "xai");
     assert_eq!(ProviderChoice::Lmstudio.as_arg_value(), "lmstudio");
     assert_eq!(ProviderChoice::Ollama.as_arg_value(), "ollama");
+    assert_eq!(ProviderChoice::OllamaCloud.as_arg_value(), "ollama-cloud");
     assert_eq!(ProviderChoice::Chutes.as_arg_value(), "chutes");
     assert_eq!(ProviderChoice::Cerebras.as_arg_value(), "cerebras");
     assert_eq!(

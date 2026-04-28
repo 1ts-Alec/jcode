@@ -78,6 +78,8 @@ pub enum ProviderChoice {
     #[value(alias = "lm-studio")]
     Lmstudio,
     Ollama,
+    #[value(alias = "ollama-cloud-api", alias = "ollama.com")]
+    OllamaCloud,
     Chutes,
     #[value(alias = "cerebrascode", alias = "cerberascode")]
     Cerebras,
@@ -131,6 +133,7 @@ impl ProviderChoice {
             Self::Xai => "xai",
             Self::Lmstudio => "lmstudio",
             Self::Ollama => "ollama",
+            Self::OllamaCloud => "ollama-cloud",
             Self::Chutes => "chutes",
             Self::Cerebras => "cerebras",
             Self::AlibabaCodingPlan => "alibaba-coding-plan",
@@ -171,6 +174,7 @@ pub fn profile_for_choice(choice: &ProviderChoice) -> Option<OpenAiCompatiblePro
         ProviderChoice::Xai => Some(crate::provider_catalog::XAI_PROFILE),
         ProviderChoice::Lmstudio => Some(crate::provider_catalog::LMSTUDIO_PROFILE),
         ProviderChoice::Ollama => Some(crate::provider_catalog::OLLAMA_PROFILE),
+        ProviderChoice::OllamaCloud => Some(crate::provider_catalog::OLLAMA_CLOUD_PROFILE),
         ProviderChoice::Chutes => Some(crate::provider_catalog::CHUTES_PROFILE),
         ProviderChoice::Cerebras => Some(crate::provider_catalog::CEREBRAS_PROFILE),
         ProviderChoice::AlibabaCodingPlan => {
@@ -214,6 +218,7 @@ pub fn login_provider_for_choice(choice: &ProviderChoice) -> Option<LoginProvide
         ProviderChoice::Xai => Some(crate::provider_catalog::XAI_LOGIN_PROVIDER),
         ProviderChoice::Lmstudio => Some(crate::provider_catalog::LMSTUDIO_LOGIN_PROVIDER),
         ProviderChoice::Ollama => Some(crate::provider_catalog::OLLAMA_LOGIN_PROVIDER),
+        ProviderChoice::OllamaCloud => Some(crate::provider_catalog::OLLAMA_CLOUD_LOGIN_PROVIDER),
         ProviderChoice::Chutes => Some(crate::provider_catalog::CHUTES_LOGIN_PROVIDER),
         ProviderChoice::Cerebras => Some(crate::provider_catalog::CEREBRAS_LOGIN_PROVIDER),
         ProviderChoice::AlibabaCodingPlan => {
@@ -1089,6 +1094,7 @@ async fn init_provider_with_options(
         | ProviderChoice::Xai
         | ProviderChoice::Lmstudio
         | ProviderChoice::Ollama
+        | ProviderChoice::OllamaCloud
         | ProviderChoice::Chutes
         | ProviderChoice::Cerebras
         | ProviderChoice::AlibabaCodingPlan
