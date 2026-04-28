@@ -76,17 +76,19 @@ const CACHE_PIN_TTL_SECS: u64 = 60 * 60;
 const ENDPOINTS_CACHE_TTL_SECS: u64 = 60 * 60;
 const MAX_BACKGROUND_ENDPOINT_REFRESHES: usize = 8;
 
-fn is_ollama_cloud_api_base(api_base: &str) -> bool {
-    api_base.trim_end_matches('/') == "https://ollama.com/v1"
+fn models_dev_price_per_token(value: Option<f64>) -> Option<String> {
+    value
+        .filter(|value| *value > 0.0)
+        .map(|value| format!("{:.12}", value / 1_000_000.0))
 }
 
-fn parse_models_dev_context_lengths(data: &Value, provider_id: &str) -> HashMap<String, u64> {
+pub(crate) fn parse_models_dev_model_infos(data: &Value, provider_id: &str) -> Vec<ModelInfo> {
     let Some(models) = data
         .get(provider_id)
         .and_then(|provider| provider.get("models"))
         .and_then(|models| models.as_object())
     else {
-        return HashMap::new();
+        return Vec::new();
     };
 
     models
@@ -96,24 +98,58 @@ fn parse_models_dev_context_lengths(data: &Value, provider_id: &str) -> HashMap<
                 .get("id")
                 .and_then(|value| value.as_str())
                 .unwrap_or(fallback_id)
+                .trim()
                 .to_string();
-            let context = model
+            if id.is_empty() {
+                return None;
+            }
+
+            let name = model
+                .get("name")
+                .and_then(|value| value.as_str())
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .unwrap_or(&id)
+                .to_string();
+            let context_length = model
                 .get("limit")
                 .and_then(|limit| limit.get("context"))
-                .and_then(|value| value.as_u64())?;
-            if id.trim().is_empty() || context == 0 {
-                None
-            } else {
-                Some((id, context))
-            }
+                .and_then(|value| value.as_u64())
+                .filter(|value| *value > 0);
+            let cost = model.get("cost");
+            let pricing = ModelPricing {
+                prompt: models_dev_price_per_token(
+                    cost.and_then(|cost| cost.get("input"))
+                        .and_then(|value| value.as_f64()),
+                ),
+                completion: models_dev_price_per_token(
+                    cost.and_then(|cost| cost.get("output"))
+                        .and_then(|value| value.as_f64()),
+                ),
+                input_cache_read: models_dev_price_per_token(
+                    cost.and_then(|cost| cost.get("cache_read"))
+                        .and_then(|value| value.as_f64()),
+                ),
+                input_cache_write: models_dev_price_per_token(
+                    cost.and_then(|cost| cost.get("cache_write"))
+                        .and_then(|value| value.as_f64()),
+                ),
+            };
+            Some(ModelInfo {
+                id,
+                name,
+                context_length,
+                pricing,
+                created: None,
+            })
         })
         .collect()
 }
 
-async fn fetch_models_dev_context_lengths(
+async fn fetch_models_dev_model_infos(
     client: &Client,
     provider_id: &str,
-) -> Result<HashMap<String, u64>> {
+) -> Result<Vec<ModelInfo>> {
     let response = client
         .get("https://models.dev/api.json")
         .header("User-Agent", "jcode")
@@ -131,30 +167,78 @@ async fn fetch_models_dev_context_lengths(
         .json()
         .await
         .context("Failed to parse models.dev metadata response")?;
-    Ok(parse_models_dev_context_lengths(&data, provider_id))
+    Ok(parse_models_dev_model_infos(&data, provider_id))
 }
 
-async fn enrich_ollama_cloud_model_metadata(client: &Client, models: &mut [ModelInfo]) {
-    let Ok(context_lengths) = fetch_models_dev_context_lengths(client, "ollama-cloud").await else {
-        return;
-    };
+fn merge_models_dev_model_infos(models: &mut Vec<ModelInfo>, models_dev_models: Vec<ModelInfo>) {
+    let mut existing = models
+        .iter()
+        .enumerate()
+        .map(|(idx, model)| (model.id.clone(), idx))
+        .collect::<HashMap<_, _>>();
 
-    for model in models {
-        if let Some(context_length) = context_lengths.get(&model.id).copied() {
-            model.context_length = Some(context_length);
+    for models_dev_model in models_dev_models {
+        if let Some(idx) = existing.get(&models_dev_model.id).copied() {
+            let model = &mut models[idx];
+            if model.name.trim().is_empty() || model.name == model.id {
+                model.name = models_dev_model.name;
+            }
+            if model.context_length.is_none() {
+                model.context_length = models_dev_model.context_length;
+            }
+            if model.pricing.prompt.is_none() {
+                model.pricing.prompt = models_dev_model.pricing.prompt;
+            }
+            if model.pricing.completion.is_none() {
+                model.pricing.completion = models_dev_model.pricing.completion;
+            }
+            if model.pricing.input_cache_read.is_none() {
+                model.pricing.input_cache_read = models_dev_model.pricing.input_cache_read;
+            }
+            if model.pricing.input_cache_write.is_none() {
+                model.pricing.input_cache_write = models_dev_model.pricing.input_cache_write;
+            }
+        } else {
+            existing.insert(models_dev_model.id.clone(), models.len());
+            models.push(models_dev_model);
         }
     }
 }
 
+async fn enrich_models_dev_model_metadata(
+    client: &Client,
+    models: &mut Vec<ModelInfo>,
+    provider_id: &str,
+) {
+    let Ok(models_dev_models) = fetch_models_dev_model_infos(client, provider_id).await else {
+        return;
+    };
+    merge_models_dev_model_infos(models, models_dev_models);
+}
+
 fn explicit_openrouter_runtime_configured() -> bool {
     [
-        "JCODE_OPENROUTER_API_BASE",
-        "JCODE_OPENROUTER_API_KEY_NAME",
-        "JCODE_OPENROUTER_ENV_FILE",
-        "JCODE_OPENROUTER_DYNAMIC_BEARER_PROVIDER",
+        (
+            crate::provider_catalog::OPENAI_COMPAT_RUNTIME_API_BASE_ENV,
+            crate::provider_catalog::LEGACY_OPENROUTER_API_BASE_ENV,
+        ),
+        (
+            crate::provider_catalog::OPENAI_COMPAT_RUNTIME_API_KEY_NAME_ENV,
+            crate::provider_catalog::LEGACY_OPENROUTER_API_KEY_NAME_ENV,
+        ),
+        (
+            crate::provider_catalog::OPENAI_COMPAT_RUNTIME_ENV_FILE_ENV,
+            crate::provider_catalog::LEGACY_OPENROUTER_ENV_FILE_ENV,
+        ),
+        (
+            crate::provider_catalog::OPENAI_COMPAT_RUNTIME_DYNAMIC_BEARER_PROVIDER_ENV,
+            crate::provider_catalog::LEGACY_OPENROUTER_DYNAMIC_BEARER_PROVIDER_ENV,
+        ),
     ]
     .iter()
-    .any(|var| std::env::var_os(var).is_some())
+    .any(|(neutral, legacy)| {
+        crate::provider_catalog::openai_compat_runtime_var_is_set(neutral, legacy)
+    })
 }
 
 fn autodetected_openai_compatible_profile()
@@ -193,12 +277,12 @@ fn autodetected_openai_compatible_profile()
 }
 
 fn configured_api_base() -> String {
-    let raw = std::env::var("JCODE_OPENROUTER_API_BASE")
-        .ok()
-        .map(|v| v.trim().to_string())
-        .filter(|v| !v.is_empty())
-        .or_else(|| autodetected_openai_compatible_profile().map(|profile| profile.api_base))
-        .unwrap_or_else(|| DEFAULT_API_BASE.to_string());
+    let raw = crate::provider_catalog::openai_compat_runtime_var(
+        crate::provider_catalog::OPENAI_COMPAT_RUNTIME_API_BASE_ENV,
+        crate::provider_catalog::LEGACY_OPENROUTER_API_BASE_ENV,
+    )
+    .or_else(|| autodetected_openai_compatible_profile().map(|profile| profile.api_base))
+    .unwrap_or_else(|| DEFAULT_API_BASE.to_string());
     normalize_api_base(&raw).unwrap_or_else(|| {
         crate::logging::warn(&format!(
             "Ignoring invalid JCODE_OPENROUTER_API_BASE '{}'; using {}",
@@ -209,12 +293,12 @@ fn configured_api_base() -> String {
 }
 
 fn configured_api_key_name() -> String {
-    let raw = std::env::var("JCODE_OPENROUTER_API_KEY_NAME")
-        .ok()
-        .map(|v| v.trim().to_string())
-        .filter(|v| !v.is_empty())
-        .or_else(|| autodetected_openai_compatible_profile().map(|profile| profile.api_key_env))
-        .unwrap_or_else(|| DEFAULT_API_KEY_NAME.to_string());
+    let raw = crate::provider_catalog::openai_compat_runtime_var(
+        crate::provider_catalog::OPENAI_COMPAT_RUNTIME_API_KEY_NAME_ENV,
+        crate::provider_catalog::LEGACY_OPENROUTER_API_KEY_NAME_ENV,
+    )
+    .or_else(|| autodetected_openai_compatible_profile().map(|profile| profile.api_key_env))
+    .unwrap_or_else(|| DEFAULT_API_KEY_NAME.to_string());
     if is_safe_env_key_name(&raw) {
         raw
     } else {
@@ -227,12 +311,12 @@ fn configured_api_key_name() -> String {
 }
 
 fn configured_env_file_name() -> String {
-    let raw = std::env::var("JCODE_OPENROUTER_ENV_FILE")
-        .ok()
-        .map(|v| v.trim().to_string())
-        .filter(|v| !v.is_empty())
-        .or_else(|| autodetected_openai_compatible_profile().map(|profile| profile.env_file))
-        .unwrap_or_else(|| DEFAULT_ENV_FILE.to_string());
+    let raw = crate::provider_catalog::openai_compat_runtime_var(
+        crate::provider_catalog::OPENAI_COMPAT_RUNTIME_ENV_FILE_ENV,
+        crate::provider_catalog::LEGACY_OPENROUTER_ENV_FILE_ENV,
+    )
+    .or_else(|| autodetected_openai_compatible_profile().map(|profile| profile.env_file))
+    .unwrap_or_else(|| DEFAULT_ENV_FILE.to_string());
     if is_safe_env_file_name(&raw) {
         raw
     } else {
@@ -253,7 +337,10 @@ fn parse_env_bool(value: &str) -> Option<bool> {
 }
 
 fn provider_features_enabled(api_base: &str) -> bool {
-    if let Ok(raw) = std::env::var("JCODE_OPENROUTER_PROVIDER_FEATURES") {
+    if let Some(raw) = crate::provider_catalog::openai_compat_runtime_var(
+        crate::provider_catalog::OPENAI_COMPAT_RUNTIME_PROVIDER_FEATURES_ENV,
+        crate::provider_catalog::LEGACY_OPENROUTER_PROVIDER_FEATURES_ENV,
+    ) {
         if let Some(value) = parse_env_bool(&raw) {
             return value;
         }
@@ -266,7 +353,10 @@ fn provider_features_enabled(api_base: &str) -> bool {
 }
 
 fn model_catalog_enabled() -> bool {
-    if let Ok(raw) = std::env::var("JCODE_OPENROUTER_MODEL_CATALOG") {
+    if let Some(raw) = crate::provider_catalog::openai_compat_runtime_var(
+        crate::provider_catalog::OPENAI_COMPAT_RUNTIME_MODEL_CATALOG_ENV,
+        crate::provider_catalog::LEGACY_OPENROUTER_MODEL_CATALOG_ENV,
+    ) {
         if let Some(value) = parse_env_bool(&raw) {
             return value;
         }
@@ -285,11 +375,11 @@ enum AuthHeaderMode {
 }
 
 fn configured_auth_header_mode() -> AuthHeaderMode {
-    let Some(raw) = std::env::var("JCODE_OPENROUTER_AUTH_HEADER")
-        .ok()
-        .map(|v| v.trim().to_ascii_lowercase())
-        .filter(|v| !v.is_empty())
-    else {
+    let Some(raw) = crate::provider_catalog::openai_compat_runtime_var(
+        crate::provider_catalog::OPENAI_COMPAT_RUNTIME_AUTH_HEADER_ENV,
+        crate::provider_catalog::LEGACY_OPENROUTER_AUTH_HEADER_ENV,
+    )
+    .map(|v| v.trim().to_ascii_lowercase()) else {
         return AuthHeaderMode::AuthorizationBearer;
     };
 
@@ -307,11 +397,11 @@ fn configured_auth_header_mode() -> AuthHeaderMode {
 }
 
 fn configured_auth_header_name() -> HeaderName {
-    let raw = std::env::var("JCODE_OPENROUTER_AUTH_HEADER_NAME")
-        .ok()
-        .map(|v| v.trim().to_string())
-        .filter(|v| !v.is_empty())
-        .unwrap_or_else(|| "api-key".to_string());
+    let raw = crate::provider_catalog::openai_compat_runtime_var(
+        crate::provider_catalog::OPENAI_COMPAT_RUNTIME_AUTH_HEADER_NAME_ENV,
+        crate::provider_catalog::LEGACY_OPENROUTER_AUTH_HEADER_NAME_ENV,
+    )
+    .unwrap_or_else(|| "api-key".to_string());
     HeaderName::from_bytes(raw.as_bytes()).unwrap_or_else(|_| {
         crate::logging::warn(&format!(
             "Ignoring invalid JCODE_OPENROUTER_AUTH_HEADER_NAME '{}'; using api-key",
@@ -322,26 +412,102 @@ fn configured_auth_header_name() -> HeaderName {
 }
 
 fn configured_dynamic_bearer_provider() -> Option<String> {
-    std::env::var("JCODE_OPENROUTER_DYNAMIC_BEARER_PROVIDER")
-        .ok()
-        .map(|v| v.trim().to_ascii_lowercase())
-        .filter(|v| !v.is_empty())
+    crate::provider_catalog::openai_compat_runtime_var(
+        crate::provider_catalog::OPENAI_COMPAT_RUNTIME_DYNAMIC_BEARER_PROVIDER_ENV,
+        crate::provider_catalog::LEGACY_OPENROUTER_DYNAMIC_BEARER_PROVIDER_ENV,
+    )
+    .map(|v| v.trim().to_ascii_lowercase())
+    .filter(|v| !v.is_empty())
 }
 
 fn configured_allow_no_auth() -> bool {
-    std::env::var("JCODE_OPENROUTER_ALLOW_NO_AUTH")
+    crate::provider_catalog::openai_compat_runtime_var(
+        crate::provider_catalog::OPENAI_COMPAT_RUNTIME_ALLOW_NO_AUTH_ENV,
+        crate::provider_catalog::LEGACY_OPENROUTER_ALLOW_NO_AUTH_ENV,
+    )
+    .and_then(|raw| parse_env_bool(&raw))
+    .or_else(|| {
+        autodetected_openai_compatible_profile().and_then(|profile| {
+            if profile.requires_api_key {
+                None
+            } else {
+                Some(true)
+            }
+        })
+    })
+    .unwrap_or(false)
+}
+
+fn known_profile_for_api_base(
+    api_base: &str,
+) -> Option<crate::provider_catalog::ResolvedOpenAiCompatibleProfile> {
+    let normalized = normalize_api_base(api_base)?;
+    crate::provider_catalog::openai_compatible_profiles()
+        .iter()
+        .map(|profile| crate::provider_catalog::resolve_openai_compatible_profile(*profile))
+        .find(|profile| {
+            normalize_api_base(&profile.api_base).as_deref() == Some(normalized.as_str())
+        })
+}
+
+fn configured_runtime_provider_id(
+    api_base: &str,
+    supports_provider_features: bool,
+    autodetected: Option<&crate::provider_catalog::ResolvedOpenAiCompatibleProfile>,
+) -> String {
+    std::env::var(crate::provider_catalog::OPENAI_COMPAT_RUNTIME_PROVIDER_ID_ENV)
         .ok()
-        .and_then(|raw| parse_env_bool(&raw))
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .or_else(|| autodetected.map(|profile| profile.id.clone()))
+        .or_else(|| known_profile_for_api_base(api_base).map(|profile| profile.id))
+        .unwrap_or_else(|| {
+            if supports_provider_features {
+                "openrouter".to_string()
+            } else {
+                "openai-compatible".to_string()
+            }
+        })
+}
+
+fn configured_runtime_provider_display_name(
+    api_base: &str,
+    supports_provider_features: bool,
+    autodetected: Option<&crate::provider_catalog::ResolvedOpenAiCompatibleProfile>,
+) -> String {
+    std::env::var(crate::provider_catalog::OPENAI_COMPAT_RUNTIME_PROVIDER_NAME_ENV)
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .or_else(|| autodetected.map(|profile| profile.display_name.clone()))
+        .or_else(|| known_profile_for_api_base(api_base).map(|profile| profile.display_name))
+        .unwrap_or_else(|| {
+            if supports_provider_features {
+                "OpenRouter".to_string()
+            } else {
+                "OpenAI-compatible".to_string()
+            }
+        })
+}
+
+fn configured_models_dev_provider_id(
+    provider_id: &str,
+    autodetected: Option<&crate::provider_catalog::ResolvedOpenAiCompatibleProfile>,
+) -> Option<String> {
+    std::env::var(crate::provider_catalog::OPENAI_COMPAT_RUNTIME_MODELS_DEV_PROVIDER_ENV)
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
         .or_else(|| {
-            autodetected_openai_compatible_profile().and_then(|profile| {
-                if profile.requires_api_key {
-                    None
-                } else {
-                    Some(true)
-                }
+            autodetected.and_then(|profile| {
+                crate::provider_catalog::openai_compatible_models_dev_provider_id(&profile.id)
+                    .map(ToString::to_string)
             })
         })
-        .unwrap_or(false)
+        .or_else(|| {
+            crate::provider_catalog::openai_compatible_models_dev_provider_id(provider_id)
+                .map(ToString::to_string)
+        })
 }
 
 fn is_kimi_coding_api_base(api_base: &str) -> bool {
@@ -452,6 +618,7 @@ async fn fetch_models_from_api(
     client: Client,
     api_base: String,
     auth: ProviderAuth,
+    models_dev_provider_id: Option<String>,
     models_cache: Arc<RwLock<ModelsCache>>,
 ) -> Result<Vec<ModelInfo>> {
     let url = format!("{}/models", api_base);
@@ -462,6 +629,17 @@ async fn fetch_models_from_api(
             .with_context(|| format!("Failed to fetch models from {}", api_base))?;
 
     if !response.status().is_success() {
+        if let Some(provider_id) = models_dev_provider_id.as_deref()
+            && let Ok(models) = fetch_models_dev_model_infos(&client, provider_id).await
+            && !models.is_empty()
+        {
+            save_disk_cache(&models);
+            let mut cache = models_cache.write().await;
+            cache.models = models.clone();
+            cache.fetched = true;
+            cache.cached_at = current_unix_secs();
+            return Ok(models);
+        }
         let status = response.status();
         let body = crate::util::http_error_body(response, "HTTP error").await;
         anyhow::bail!("Model catalog API error ({}): {}", status, body);
@@ -477,8 +655,8 @@ async fn fetch_models_from_api(
         .await
         .context("Failed to parse models response")?;
 
-    if is_ollama_cloud_api_base(&api_base) {
-        enrich_ollama_cloud_model_metadata(&client, &mut models_response.data).await;
+    if let Some(provider_id) = models_dev_provider_id.as_deref() {
+        enrich_models_dev_model_metadata(&client, &mut models_response.data, provider_id).await;
     }
 
     save_disk_cache(&models_response.data);
@@ -524,6 +702,9 @@ pub struct OpenRouterProvider {
     model: Arc<RwLock<String>>,
     api_base: String,
     auth: ProviderAuth,
+    provider_id: String,
+    provider_display_name: String,
+    models_dev_provider_id: Option<String>,
     supports_provider_features: bool,
     supports_model_catalog: bool,
     static_models: Vec<String>,
@@ -545,24 +726,8 @@ impl OpenRouterProvider {
         self.supports_provider_features
     }
 
-    pub(crate) fn compatible_provider_display_name(&self) -> &'static str {
-        if self.supports_provider_features {
-            return "OpenRouter";
-        }
-
-        crate::provider_catalog::openai_compatible_profiles()
-            .iter()
-            .find_map(|profile| {
-                let resolved = crate::provider_catalog::resolve_openai_compatible_profile(*profile);
-                if normalize_api_base(&resolved.api_base).as_deref()
-                    == normalize_api_base(&self.api_base).as_deref()
-                {
-                    Some(profile.display_name)
-                } else {
-                    None
-                }
-            })
-            .unwrap_or("OpenAI-compatible")
+    pub(crate) fn compatible_provider_display_name(&self) -> String {
+        self.provider_display_name.clone()
     }
 
     pub fn new_named_openai_compatible(
@@ -617,21 +782,41 @@ impl OpenRouterProvider {
             .filter(|id| !id.is_empty())
             .map(ToString::to_string)
             .collect::<Vec<_>>();
+        let supports_provider_features = matches!(
+            profile.provider_type,
+            crate::config::NamedProviderType::OpenRouter
+        ) || profile.provider_routing
+            || profile.allow_provider_pinning;
+        let supports_model_catalog = profile.model_catalog
+            || profile.models_dev_provider.is_some()
+            || matches!(
+                profile.provider_type,
+                crate::config::NamedProviderType::OpenRouter
+            );
+        let provider_display_name = profile
+            .display_name
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or(profile_name)
+            .to_string();
+        let models_dev_provider_id = profile
+            .models_dev_provider
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToString::to_string);
+
         Ok(Self {
             client: crate::provider::shared_http_client(),
             model: Arc::new(RwLock::new(model)),
             api_base,
             auth,
-            supports_provider_features: matches!(
-                profile.provider_type,
-                crate::config::NamedProviderType::OpenRouter
-            ) || profile.provider_routing
-                || profile.allow_provider_pinning,
-            supports_model_catalog: profile.model_catalog
-                || matches!(
-                    profile.provider_type,
-                    crate::config::NamedProviderType::OpenRouter
-                ),
+            provider_id: profile_name.to_string(),
+            provider_display_name,
+            models_dev_provider_id,
+            supports_provider_features,
+            supports_model_catalog,
             static_models,
             send_openrouter_headers: false,
             models_cache: Arc::new(RwLock::new(ModelsCache::default())),
@@ -674,33 +859,41 @@ impl OpenRouterProvider {
         let supports_model_catalog = model_catalog_enabled();
         let send_openrouter_headers = supports_provider_features;
         let auth = Self::resolve_auth()?;
-        let static_models = std::env::var("JCODE_OPENROUTER_STATIC_MODELS")
-            .ok()
-            .map(|raw| {
-                raw.lines()
-                    .map(str::trim)
-                    .filter(|line| !line.is_empty())
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default();
+        let static_models = crate::provider_catalog::openai_compat_runtime_var(
+            crate::provider_catalog::OPENAI_COMPAT_RUNTIME_STATIC_MODELS_ENV,
+            crate::provider_catalog::LEGACY_OPENROUTER_STATIC_MODELS_ENV,
+        )
+        .map(|raw| {
+            raw.lines()
+                .map(str::trim)
+                .filter(|line| !line.is_empty())
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
 
-        if std::env::var_os("JCODE_OPENROUTER_CACHE_NAMESPACE").is_none()
-            && let Some(profile) = autodetected_profile.as_ref()
+        if !crate::provider_catalog::openai_compat_runtime_var_is_set(
+            crate::provider_catalog::OPENAI_COMPAT_RUNTIME_CACHE_NAMESPACE_ENV,
+            crate::provider_catalog::LEGACY_OPENROUTER_CACHE_NAMESPACE_ENV,
+        ) && let Some(profile) = autodetected_profile.as_ref()
         {
-            crate::env::set_var("JCODE_OPENROUTER_CACHE_NAMESPACE", &profile.id);
+            crate::provider_catalog::set_openai_compat_runtime_var(
+                crate::provider_catalog::OPENAI_COMPAT_RUNTIME_CACHE_NAMESPACE_ENV,
+                crate::provider_catalog::LEGACY_OPENROUTER_CACHE_NAMESPACE_ENV,
+                &profile.id,
+            );
         }
 
-        let model = std::env::var("JCODE_OPENROUTER_MODEL")
-            .ok()
-            .map(|value| value.trim().to_string())
-            .filter(|value| !value.is_empty())
-            .or_else(|| {
-                autodetected_profile
-                    .as_ref()
-                    .and_then(|profile| profile.default_model.clone())
-            })
-            .unwrap_or_else(|| DEFAULT_MODEL.to_string());
+        let model = crate::provider_catalog::openai_compat_runtime_var(
+            crate::provider_catalog::OPENAI_COMPAT_RUNTIME_MODEL_ENV,
+            crate::provider_catalog::LEGACY_OPENROUTER_MODEL_ENV,
+        )
+        .or_else(|| {
+            autodetected_profile
+                .as_ref()
+                .and_then(|profile| profile.default_model.clone())
+        })
+        .unwrap_or_else(|| DEFAULT_MODEL.to_string());
 
         // Parse provider routing from environment
         let provider_routing = if supports_provider_features {
@@ -708,12 +901,27 @@ impl OpenRouterProvider {
         } else {
             ProviderRouting::default()
         };
+        let provider_id = configured_runtime_provider_id(
+            &api_base,
+            supports_provider_features,
+            autodetected_profile.as_ref(),
+        );
+        let provider_display_name = configured_runtime_provider_display_name(
+            &api_base,
+            supports_provider_features,
+            autodetected_profile.as_ref(),
+        );
+        let models_dev_provider_id =
+            configured_models_dev_provider_id(&provider_id, autodetected_profile.as_ref());
 
         Ok(Self {
             client: crate::provider::shared_http_client(),
             model: Arc::new(RwLock::new(model)),
             api_base,
             auth,
+            provider_id,
+            provider_display_name,
+            models_dev_provider_id,
             supports_provider_features,
             supports_model_catalog,
             static_models,
@@ -863,6 +1071,9 @@ impl OpenRouterProvider {
         let client = self.client.clone();
         let api_base = self.api_base.clone();
         let auth = self.auth.clone();
+        let provider_id = self.provider_id.clone();
+        let provider_display_name = self.provider_display_name.clone();
+        let models_dev_provider_id = self.models_dev_provider_id.clone();
         let model_name = model.to_string();
         let refresh_state = Arc::clone(&self.endpoint_refresh);
         let endpoints_cache = Arc::clone(&self.endpoints_cache);
@@ -874,6 +1085,9 @@ impl OpenRouterProvider {
                 model: Arc::new(RwLock::new(model_name.clone())),
                 api_base,
                 auth,
+                provider_id,
+                provider_display_name,
+                models_dev_provider_id,
                 supports_provider_features: true,
                 supports_model_catalog: true,
                 static_models: Vec::new(),
@@ -939,11 +1153,20 @@ impl OpenRouterProvider {
         let api_base = self.api_base.clone();
         let auth = self.auth.clone();
         let models_cache = Arc::clone(&self.models_cache);
+        let models_dev_provider_id = self.models_dev_provider_id.clone();
         let refresh_state = Arc::clone(&self.model_catalog_refresh);
         let previous_fingerprint = self.cached_model_catalog_fingerprint();
 
         handle.spawn(async move {
-            match fetch_models_from_api(client, api_base, auth, models_cache).await {
+            match fetch_models_from_api(
+                client,
+                api_base,
+                auth,
+                models_dev_provider_id,
+                models_cache,
+            )
+            .await
+            {
                 Ok(models) => {
                     let updated = models_fingerprint(&models) != previous_fingerprint;
                     if updated {
@@ -1382,6 +1605,7 @@ impl OpenRouterProvider {
             self.client.clone(),
             self.api_base.clone(),
             self.auth.clone(),
+            self.models_dev_provider_id.clone(),
             Arc::clone(&self.models_cache),
         )
         .await
@@ -1393,6 +1617,7 @@ impl OpenRouterProvider {
             self.client.clone(),
             self.api_base.clone(),
             self.auth.clone(),
+            self.models_dev_provider_id.clone(),
             Arc::clone(&self.models_cache),
         )
         .await

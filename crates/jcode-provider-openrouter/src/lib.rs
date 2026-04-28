@@ -268,8 +268,9 @@ pub fn current_unix_secs() -> Option<u64> {
 }
 
 fn configured_cache_namespace() -> String {
-    let raw = std::env::var("JCODE_OPENROUTER_CACHE_NAMESPACE")
+    let raw = std::env::var("JCODE_OPENAI_COMPAT_RUNTIME_CACHE_NAMESPACE")
         .ok()
+        .or_else(|| std::env::var("JCODE_OPENROUTER_CACHE_NAMESPACE").ok())
         .map(|v| v.trim().to_string())
         .filter(|v| !v.is_empty())
         .unwrap_or_else(|| DEFAULT_CACHE_NAMESPACE.to_string());
@@ -580,7 +581,9 @@ impl ProviderRouting {
 pub fn parse_provider_routing_from_env() -> ProviderRouting {
     let mut routing = ProviderRouting::default();
 
-    if let Ok(providers) = std::env::var("JCODE_OPENROUTER_PROVIDER") {
+    if let Ok(providers) = std::env::var("JCODE_OPENAI_COMPAT_RUNTIME_PROVIDER")
+        .or_else(|_| std::env::var("JCODE_OPENROUTER_PROVIDER"))
+    {
         let order: Vec<String> = providers
             .split(',')
             .map(|s| s.trim().to_string())
@@ -591,7 +594,9 @@ pub fn parse_provider_routing_from_env() -> ProviderRouting {
         }
     }
 
-    if std::env::var("JCODE_OPENROUTER_NO_FALLBACK").is_ok() {
+    if std::env::var("JCODE_OPENAI_COMPAT_RUNTIME_NO_FALLBACK").is_ok()
+        || std::env::var("JCODE_OPENROUTER_NO_FALLBACK").is_ok()
+    {
         routing.allow_fallbacks = false;
     }
 

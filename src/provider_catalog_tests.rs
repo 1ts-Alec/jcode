@@ -26,6 +26,26 @@ impl Drop for EnvGuard {
     }
 }
 
+const OPENAI_COMPAT_RUNTIME_TEST_ENV: &[&str] = &[
+    OPENAI_COMPAT_RUNTIME_API_BASE_ENV,
+    OPENAI_COMPAT_RUNTIME_API_KEY_NAME_ENV,
+    OPENAI_COMPAT_RUNTIME_ENV_FILE_ENV,
+    OPENAI_COMPAT_RUNTIME_CACHE_NAMESPACE_ENV,
+    OPENAI_COMPAT_RUNTIME_PROVIDER_ID_ENV,
+    OPENAI_COMPAT_RUNTIME_PROVIDER_NAME_ENV,
+    OPENAI_COMPAT_RUNTIME_MODEL_ENV,
+    OPENAI_COMPAT_RUNTIME_STATIC_MODELS_ENV,
+    OPENAI_COMPAT_RUNTIME_MODEL_CATALOG_ENV,
+    OPENAI_COMPAT_RUNTIME_PROVIDER_FEATURES_ENV,
+    OPENAI_COMPAT_RUNTIME_ALLOW_NO_AUTH_ENV,
+    OPENAI_COMPAT_RUNTIME_AUTH_HEADER_ENV,
+    OPENAI_COMPAT_RUNTIME_AUTH_HEADER_NAME_ENV,
+    OPENAI_COMPAT_RUNTIME_DYNAMIC_BEARER_PROVIDER_ENV,
+    OPENAI_COMPAT_RUNTIME_PROVIDER_ENV,
+    OPENAI_COMPAT_RUNTIME_NO_FALLBACK_ENV,
+    OPENAI_COMPAT_RUNTIME_MODELS_DEV_PROVIDER_ENV,
+];
+
 #[test]
 fn matrix_profiles_have_unique_ids_and_safe_metadata() {
     let mut ids = HashSet::new();
@@ -104,6 +124,27 @@ fn matrix_login_provider_ids_and_aliases_are_unique() {
 }
 
 #[test]
+fn matrix_models_dev_provider_ids_cover_known_non_matching_profiles() {
+    assert_eq!(
+        openai_compatible_models_dev_provider_id("fireworks"),
+        Some("fireworks-ai")
+    );
+    assert_eq!(
+        openai_compatible_models_dev_provider_id("kimi"),
+        Some("kimi-for-coding")
+    );
+    assert_eq!(
+        openai_compatible_models_dev_provider_id("nebius"),
+        Some("nebius")
+    );
+    assert_eq!(
+        openai_compatible_models_dev_provider_id("ollama"),
+        None,
+        "local Ollama has no models.dev provider catalog; Ollama Cloud is separate"
+    );
+}
+
+#[test]
 fn matrix_tui_login_selection_supports_numbers_and_names() {
     let providers = tui_login_providers();
     assert_eq!(
@@ -162,11 +203,15 @@ fn matrix_cli_login_selection_preserves_existing_order() {
 fn matrix_openrouter_like_sources_include_all_static_profiles() {
     let _lock = crate::storage::lock_test_env();
     let guard = EnvGuard::save(&[
+        OPENAI_COMPAT_RUNTIME_API_KEY_NAME_ENV,
+        OPENAI_COMPAT_RUNTIME_ENV_FILE_ENV,
         "JCODE_OPENROUTER_API_KEY_NAME",
         "JCODE_OPENROUTER_ENV_FILE",
         "JCODE_OPENAI_COMPAT_API_KEY_NAME",
         "JCODE_OPENAI_COMPAT_ENV_FILE",
     ]);
+    crate::env::remove_var(OPENAI_COMPAT_RUNTIME_API_KEY_NAME_ENV);
+    crate::env::remove_var(OPENAI_COMPAT_RUNTIME_ENV_FILE_ENV);
     crate::env::remove_var("JCODE_OPENROUTER_API_KEY_NAME");
     crate::env::remove_var("JCODE_OPENROUTER_ENV_FILE");
     crate::env::remove_var("JCODE_OPENAI_COMPAT_API_KEY_NAME");
@@ -193,18 +238,23 @@ fn matrix_openrouter_like_sources_include_all_static_profiles() {
 fn matrix_openrouter_like_sources_accept_valid_overrides() {
     let _lock = crate::storage::lock_test_env();
     let _guard = EnvGuard::save(&[
+        OPENAI_COMPAT_RUNTIME_API_KEY_NAME_ENV,
+        OPENAI_COMPAT_RUNTIME_ENV_FILE_ENV,
         "JCODE_OPENROUTER_API_KEY_NAME",
         "JCODE_OPENROUTER_ENV_FILE",
         "JCODE_OPENAI_COMPAT_API_KEY_NAME",
         "JCODE_OPENAI_COMPAT_ENV_FILE",
     ]);
 
+    crate::env::set_var(OPENAI_COMPAT_RUNTIME_API_KEY_NAME_ENV, "RUNTIME_KEY");
+    crate::env::set_var(OPENAI_COMPAT_RUNTIME_ENV_FILE_ENV, "runtime.env");
     crate::env::set_var("JCODE_OPENROUTER_API_KEY_NAME", "ALT_OPENROUTER_KEY");
     crate::env::set_var("JCODE_OPENROUTER_ENV_FILE", "alt-openrouter.env");
     crate::env::set_var("JCODE_OPENAI_COMPAT_API_KEY_NAME", "ALT_COMPAT_KEY");
     crate::env::set_var("JCODE_OPENAI_COMPAT_ENV_FILE", "alt-compat.env");
 
     let sources = openrouter_like_api_key_sources();
+    assert!(sources.contains(&("RUNTIME_KEY".to_string(), "runtime.env".to_string())));
     assert!(sources.contains(&(
         "ALT_OPENROUTER_KEY".to_string(),
         "alt-openrouter.env".to_string()
@@ -244,6 +294,20 @@ fn named_provider_config_accepts_openai_compatible_spelling() {
 fn named_provider_profile_maps_to_openai_compatible_runtime_env() {
     let _lock = crate::storage::lock_test_env();
     let _guard = EnvGuard::save(&[
+        OPENAI_COMPAT_RUNTIME_API_BASE_ENV,
+        OPENAI_COMPAT_RUNTIME_API_KEY_NAME_ENV,
+        OPENAI_COMPAT_RUNTIME_ENV_FILE_ENV,
+        OPENAI_COMPAT_RUNTIME_CACHE_NAMESPACE_ENV,
+        OPENAI_COMPAT_RUNTIME_PROVIDER_ID_ENV,
+        OPENAI_COMPAT_RUNTIME_PROVIDER_NAME_ENV,
+        OPENAI_COMPAT_RUNTIME_PROVIDER_FEATURES_ENV,
+        OPENAI_COMPAT_RUNTIME_ALLOW_NO_AUTH_ENV,
+        OPENAI_COMPAT_RUNTIME_MODEL_CATALOG_ENV,
+        OPENAI_COMPAT_RUNTIME_MODEL_ENV,
+        OPENAI_COMPAT_RUNTIME_STATIC_MODELS_ENV,
+        OPENAI_COMPAT_RUNTIME_AUTH_HEADER_ENV,
+        OPENAI_COMPAT_RUNTIME_AUTH_HEADER_NAME_ENV,
+        OPENAI_COMPAT_RUNTIME_MODELS_DEV_PROVIDER_ENV,
         "JCODE_OPENROUTER_API_BASE",
         "JCODE_OPENROUTER_API_KEY_NAME",
         "JCODE_OPENROUTER_ENV_FILE",
@@ -263,6 +327,7 @@ fn named_provider_profile_maps_to_openai_compatible_runtime_env() {
         r#"
         [providers.my-gateway]
         type = "openai-compatible"
+        display_name = "Gateway Labs"
         base_url = "https://llm.example.com/v1/"
         auth = "header"
         auth_header = "x-api-key"
@@ -281,6 +346,12 @@ fn named_provider_profile_maps_to_openai_compatible_runtime_env() {
 
     apply_named_provider_profile_env_from_config("my-gateway", &cfg).expect("apply profile");
 
+    assert_eq!(
+        std::env::var(OPENAI_COMPAT_RUNTIME_API_BASE_ENV)
+            .ok()
+            .as_deref(),
+        Some("https://llm.example.com/v1")
+    );
     assert_eq!(
         std::env::var("JCODE_OPENROUTER_API_BASE").ok().as_deref(),
         Some("https://llm.example.com/v1")
@@ -326,6 +397,12 @@ fn named_provider_profile_maps_to_openai_compatible_runtime_env() {
         Some("x-api-key")
     );
     assert_eq!(
+        std::env::var(OPENAI_COMPAT_RUNTIME_PROVIDER_NAME_ENV)
+            .ok()
+            .as_deref(),
+        Some("Gateway Labs")
+    );
+    assert_eq!(
         std::env::var("JCODE_NAMED_PROVIDER_PROFILE")
             .ok()
             .as_deref(),
@@ -334,9 +411,74 @@ fn named_provider_profile_maps_to_openai_compatible_runtime_env() {
 }
 
 #[test]
+fn named_provider_profile_can_publish_models_dev_identity() {
+    let _lock = crate::storage::lock_test_env();
+    let mut keys = OPENAI_COMPAT_RUNTIME_TEST_ENV.to_vec();
+    keys.extend([
+        "JCODE_OPENROUTER_API_BASE",
+        "JCODE_OPENROUTER_CACHE_NAMESPACE",
+        "JCODE_OPENROUTER_MODEL_CATALOG",
+        "JCODE_OPENROUTER_PROVIDER_FEATURES",
+        "JCODE_OPENROUTER_ALLOW_NO_AUTH",
+        "JCODE_NAMED_PROVIDER_PROFILE",
+    ]);
+    let _guard = EnvGuard::save(&keys);
+
+    let cfg: crate::config::Config = toml::from_str(
+        r#"
+        [providers.gateway]
+        type = "openai-compatible"
+        display_name = "Gateway Labs"
+        base_url = "https://llm.example.com/v1"
+        auth = "none"
+        models_dev_provider = "groq"
+        "#,
+    )
+    .expect("config should parse");
+
+    apply_named_provider_profile_env_from_config("gateway", &cfg).expect("apply profile");
+
+    assert_eq!(
+        std::env::var(OPENAI_COMPAT_RUNTIME_PROVIDER_ID_ENV)
+            .ok()
+            .as_deref(),
+        Some("gateway")
+    );
+    assert_eq!(
+        std::env::var(OPENAI_COMPAT_RUNTIME_PROVIDER_NAME_ENV)
+            .ok()
+            .as_deref(),
+        Some("Gateway Labs")
+    );
+    assert_eq!(
+        std::env::var(OPENAI_COMPAT_RUNTIME_MODELS_DEV_PROVIDER_ENV)
+            .ok()
+            .as_deref(),
+        Some("groq")
+    );
+    assert_eq!(
+        std::env::var(OPENAI_COMPAT_RUNTIME_MODEL_CATALOG_ENV)
+            .ok()
+            .as_deref(),
+        Some("1")
+    );
+    assert_eq!(
+        std::env::var("JCODE_OPENROUTER_MODEL_CATALOG")
+            .ok()
+            .as_deref(),
+        Some("1")
+    );
+}
+
+#[test]
 fn named_provider_inline_api_key_is_private_runtime_fallback() {
     let _lock = crate::storage::lock_test_env();
     let _guard = EnvGuard::save(&[
+        OPENAI_COMPAT_RUNTIME_API_BASE_ENV,
+        OPENAI_COMPAT_RUNTIME_API_KEY_NAME_ENV,
+        OPENAI_COMPAT_RUNTIME_CACHE_NAMESPACE_ENV,
+        OPENAI_COMPAT_RUNTIME_PROVIDER_FEATURES_ENV,
+        OPENAI_COMPAT_RUNTIME_MODEL_CATALOG_ENV,
         "JCODE_OPENROUTER_API_BASE",
         "JCODE_OPENROUTER_API_KEY_NAME",
         "JCODE_OPENROUTER_CACHE_NAMESPACE",
@@ -376,12 +518,16 @@ fn named_provider_inline_api_key_is_private_runtime_fallback() {
 fn matrix_openrouter_like_sources_reject_invalid_overrides() {
     let _lock = crate::storage::lock_test_env();
     let _guard = EnvGuard::save(&[
+        OPENAI_COMPAT_RUNTIME_API_KEY_NAME_ENV,
+        OPENAI_COMPAT_RUNTIME_ENV_FILE_ENV,
         "JCODE_OPENROUTER_API_KEY_NAME",
         "JCODE_OPENROUTER_ENV_FILE",
         "JCODE_OPENAI_COMPAT_API_KEY_NAME",
         "JCODE_OPENAI_COMPAT_ENV_FILE",
     ]);
 
+    crate::env::set_var(OPENAI_COMPAT_RUNTIME_API_KEY_NAME_ENV, "bad runtime key");
+    crate::env::set_var(OPENAI_COMPAT_RUNTIME_ENV_FILE_ENV, "../bad-runtime.env");
     crate::env::set_var("JCODE_OPENROUTER_API_KEY_NAME", "bad-key-name");
     crate::env::set_var("JCODE_OPENROUTER_ENV_FILE", "../bad.env");
     crate::env::set_var("JCODE_OPENAI_COMPAT_API_KEY_NAME", "bad key");

@@ -714,6 +714,10 @@ impl Provider for OpenRouterProvider {
             return with_current_model(cache_entry.models.into_iter().map(|m| m.id).collect());
         }
 
+        if !self.static_models.is_empty() {
+            return with_current_model(self.static_models.clone());
+        }
+
         let model = self.model();
         if model.trim().is_empty() {
             Vec::new()
@@ -818,6 +822,9 @@ impl Provider for OpenRouterProvider {
             )),
             api_base: self.api_base.clone(),
             auth: self.auth.clone(),
+            provider_id: self.provider_id.clone(),
+            provider_display_name: self.provider_display_name.clone(),
+            models_dev_provider_id: self.models_dev_provider_id.clone(),
             supports_provider_features: self.supports_provider_features,
             supports_model_catalog: self.supports_model_catalog,
             static_models: self.static_models.clone(),

@@ -3,6 +3,168 @@ use std::collections::HashSet;
 
 pub const OPENAI_COMPAT_LOCAL_ENABLED_ENV: &str = "JCODE_OPENAI_COMPAT_LOCAL_ENABLED";
 
+pub const OPENAI_COMPAT_RUNTIME_API_BASE_ENV: &str = "JCODE_OPENAI_COMPAT_RUNTIME_API_BASE";
+pub const OPENAI_COMPAT_RUNTIME_API_KEY_NAME_ENV: &str = "JCODE_OPENAI_COMPAT_RUNTIME_API_KEY_NAME";
+pub const OPENAI_COMPAT_RUNTIME_ENV_FILE_ENV: &str = "JCODE_OPENAI_COMPAT_RUNTIME_ENV_FILE";
+pub const OPENAI_COMPAT_RUNTIME_CACHE_NAMESPACE_ENV: &str =
+    "JCODE_OPENAI_COMPAT_RUNTIME_CACHE_NAMESPACE";
+pub const OPENAI_COMPAT_RUNTIME_PROVIDER_ID_ENV: &str = "JCODE_OPENAI_COMPAT_RUNTIME_PROVIDER_ID";
+pub const OPENAI_COMPAT_RUNTIME_PROVIDER_NAME_ENV: &str =
+    "JCODE_OPENAI_COMPAT_RUNTIME_PROVIDER_NAME";
+pub const OPENAI_COMPAT_RUNTIME_MODEL_ENV: &str = "JCODE_OPENAI_COMPAT_RUNTIME_MODEL";
+pub const OPENAI_COMPAT_RUNTIME_STATIC_MODELS_ENV: &str =
+    "JCODE_OPENAI_COMPAT_RUNTIME_STATIC_MODELS";
+pub const OPENAI_COMPAT_RUNTIME_MODEL_CATALOG_ENV: &str =
+    "JCODE_OPENAI_COMPAT_RUNTIME_MODEL_CATALOG";
+pub const OPENAI_COMPAT_RUNTIME_PROVIDER_FEATURES_ENV: &str =
+    "JCODE_OPENAI_COMPAT_RUNTIME_PROVIDER_FEATURES";
+pub const OPENAI_COMPAT_RUNTIME_ALLOW_NO_AUTH_ENV: &str =
+    "JCODE_OPENAI_COMPAT_RUNTIME_ALLOW_NO_AUTH";
+pub const OPENAI_COMPAT_RUNTIME_AUTH_HEADER_ENV: &str = "JCODE_OPENAI_COMPAT_RUNTIME_AUTH_HEADER";
+pub const OPENAI_COMPAT_RUNTIME_AUTH_HEADER_NAME_ENV: &str =
+    "JCODE_OPENAI_COMPAT_RUNTIME_AUTH_HEADER_NAME";
+pub const OPENAI_COMPAT_RUNTIME_DYNAMIC_BEARER_PROVIDER_ENV: &str =
+    "JCODE_OPENAI_COMPAT_RUNTIME_DYNAMIC_BEARER_PROVIDER";
+pub const OPENAI_COMPAT_RUNTIME_PROVIDER_ENV: &str = "JCODE_OPENAI_COMPAT_RUNTIME_PROVIDER";
+pub const OPENAI_COMPAT_RUNTIME_NO_FALLBACK_ENV: &str = "JCODE_OPENAI_COMPAT_RUNTIME_NO_FALLBACK";
+pub const OPENAI_COMPAT_RUNTIME_MODELS_DEV_PROVIDER_ENV: &str =
+    "JCODE_OPENAI_COMPAT_RUNTIME_MODELS_DEV_PROVIDER";
+
+pub const LEGACY_OPENROUTER_API_BASE_ENV: &str = "JCODE_OPENROUTER_API_BASE";
+pub const LEGACY_OPENROUTER_API_KEY_NAME_ENV: &str = "JCODE_OPENROUTER_API_KEY_NAME";
+pub const LEGACY_OPENROUTER_ENV_FILE_ENV: &str = "JCODE_OPENROUTER_ENV_FILE";
+pub const LEGACY_OPENROUTER_CACHE_NAMESPACE_ENV: &str = "JCODE_OPENROUTER_CACHE_NAMESPACE";
+pub const LEGACY_OPENROUTER_MODEL_ENV: &str = "JCODE_OPENROUTER_MODEL";
+pub const LEGACY_OPENROUTER_STATIC_MODELS_ENV: &str = "JCODE_OPENROUTER_STATIC_MODELS";
+pub const LEGACY_OPENROUTER_MODEL_CATALOG_ENV: &str = "JCODE_OPENROUTER_MODEL_CATALOG";
+pub const LEGACY_OPENROUTER_PROVIDER_FEATURES_ENV: &str = "JCODE_OPENROUTER_PROVIDER_FEATURES";
+pub const LEGACY_OPENROUTER_ALLOW_NO_AUTH_ENV: &str = "JCODE_OPENROUTER_ALLOW_NO_AUTH";
+pub const LEGACY_OPENROUTER_AUTH_HEADER_ENV: &str = "JCODE_OPENROUTER_AUTH_HEADER";
+pub const LEGACY_OPENROUTER_AUTH_HEADER_NAME_ENV: &str = "JCODE_OPENROUTER_AUTH_HEADER_NAME";
+pub const LEGACY_OPENROUTER_DYNAMIC_BEARER_PROVIDER_ENV: &str =
+    "JCODE_OPENROUTER_DYNAMIC_BEARER_PROVIDER";
+pub const LEGACY_OPENROUTER_PROVIDER_ENV: &str = "JCODE_OPENROUTER_PROVIDER";
+pub const LEGACY_OPENROUTER_NO_FALLBACK_ENV: &str = "JCODE_OPENROUTER_NO_FALLBACK";
+
+pub const OPENAI_COMPAT_RUNTIME_ENV_PAIRS: &[(&str, &str)] = &[
+    (
+        OPENAI_COMPAT_RUNTIME_API_BASE_ENV,
+        LEGACY_OPENROUTER_API_BASE_ENV,
+    ),
+    (
+        OPENAI_COMPAT_RUNTIME_API_KEY_NAME_ENV,
+        LEGACY_OPENROUTER_API_KEY_NAME_ENV,
+    ),
+    (
+        OPENAI_COMPAT_RUNTIME_ENV_FILE_ENV,
+        LEGACY_OPENROUTER_ENV_FILE_ENV,
+    ),
+    (
+        OPENAI_COMPAT_RUNTIME_CACHE_NAMESPACE_ENV,
+        LEGACY_OPENROUTER_CACHE_NAMESPACE_ENV,
+    ),
+    (OPENAI_COMPAT_RUNTIME_MODEL_ENV, LEGACY_OPENROUTER_MODEL_ENV),
+    (
+        OPENAI_COMPAT_RUNTIME_STATIC_MODELS_ENV,
+        LEGACY_OPENROUTER_STATIC_MODELS_ENV,
+    ),
+    (
+        OPENAI_COMPAT_RUNTIME_MODEL_CATALOG_ENV,
+        LEGACY_OPENROUTER_MODEL_CATALOG_ENV,
+    ),
+    (
+        OPENAI_COMPAT_RUNTIME_PROVIDER_FEATURES_ENV,
+        LEGACY_OPENROUTER_PROVIDER_FEATURES_ENV,
+    ),
+    (
+        OPENAI_COMPAT_RUNTIME_ALLOW_NO_AUTH_ENV,
+        LEGACY_OPENROUTER_ALLOW_NO_AUTH_ENV,
+    ),
+    (
+        OPENAI_COMPAT_RUNTIME_AUTH_HEADER_ENV,
+        LEGACY_OPENROUTER_AUTH_HEADER_ENV,
+    ),
+    (
+        OPENAI_COMPAT_RUNTIME_AUTH_HEADER_NAME_ENV,
+        LEGACY_OPENROUTER_AUTH_HEADER_NAME_ENV,
+    ),
+    (
+        OPENAI_COMPAT_RUNTIME_DYNAMIC_BEARER_PROVIDER_ENV,
+        LEGACY_OPENROUTER_DYNAMIC_BEARER_PROVIDER_ENV,
+    ),
+    (
+        OPENAI_COMPAT_RUNTIME_PROVIDER_ENV,
+        LEGACY_OPENROUTER_PROVIDER_ENV,
+    ),
+    (
+        OPENAI_COMPAT_RUNTIME_NO_FALLBACK_ENV,
+        LEGACY_OPENROUTER_NO_FALLBACK_ENV,
+    ),
+];
+
+pub fn openai_compat_runtime_var(neutral: &str, legacy: &str) -> Option<String> {
+    std::env::var(neutral)
+        .ok()
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+        .or_else(|| {
+            std::env::var(legacy)
+                .ok()
+                .map(|v| v.trim().to_string())
+                .filter(|v| !v.is_empty())
+        })
+}
+
+pub fn openai_compat_runtime_var_is_set(neutral: &str, legacy: &str) -> bool {
+    std::env::var_os(neutral).is_some() || std::env::var_os(legacy).is_some()
+}
+
+pub fn set_openai_compat_runtime_var(neutral: &str, legacy: &str, value: impl AsRef<str>) {
+    let value = value.as_ref();
+    crate::env::set_var(neutral, value);
+    // Keep the legacy alias populated during the transition so older helpers and
+    // user automation continue to work. New code should read the neutral name first.
+    crate::env::set_var(legacy, value);
+}
+
+pub fn remove_openai_compat_runtime_var(neutral: &str, legacy: &str) {
+    crate::env::remove_var(neutral);
+    crate::env::remove_var(legacy);
+}
+
+pub fn openai_compatible_models_dev_provider_id(provider_id: &str) -> Option<&'static str> {
+    match provider_id {
+        "302ai" => Some("302ai"),
+        "alibaba-coding-plan" => Some("alibaba-coding-plan"),
+        "baseten" => Some("baseten"),
+        "cerebras" => Some("cerebras"),
+        "chutes" => Some("chutes"),
+        "cortecs" => Some("cortecs"),
+        "deepinfra" => Some("deepinfra"),
+        "deepseek" => Some("deepseek"),
+        "fireworks" => Some("fireworks-ai"),
+        "firmware" => Some("firmware"),
+        "groq" => Some("groq"),
+        "huggingface" => Some("huggingface"),
+        "kimi" => Some("kimi-for-coding"),
+        "lmstudio" => Some("lmstudio"),
+        "minimax" => Some("minimax"),
+        "mistral" => Some("mistral"),
+        "moonshotai" => Some("moonshotai"),
+        "nebius" => Some("nebius"),
+        "ollama-cloud" => Some("ollama-cloud"),
+        "opencode" => Some("opencode"),
+        "opencode-go" => Some("opencode-go"),
+        "perplexity" => Some("perplexity-agent"),
+        "scaleway" => Some("scaleway"),
+        "stackit" => Some("stackit"),
+        "togetherai" => Some("togetherai"),
+        "xai" => Some("xai"),
+        "zai" => Some("zai"),
+        _ => None,
+    }
+}
+
 fn api_base_uses_localhost(raw: &str) -> bool {
     let Ok(parsed) = url::Url::parse(raw) else {
         return false;
@@ -88,21 +250,14 @@ pub fn apply_openai_compatible_profile_env(profile: Option<OpenAiCompatibleProfi
         return;
     }
 
+    for (neutral, legacy) in OPENAI_COMPAT_RUNTIME_ENV_PAIRS {
+        remove_openai_compat_runtime_var(neutral, legacy);
+    }
+
     let vars = [
-        "JCODE_OPENROUTER_API_BASE",
-        "JCODE_OPENROUTER_API_KEY_NAME",
-        "JCODE_OPENROUTER_ENV_FILE",
-        "JCODE_OPENROUTER_CACHE_NAMESPACE",
-        "JCODE_OPENROUTER_PROVIDER_FEATURES",
-        "JCODE_OPENROUTER_ALLOW_NO_AUTH",
-        "JCODE_OPENROUTER_MODEL_CATALOG",
-        "JCODE_OPENROUTER_MODEL",
-        "JCODE_OPENROUTER_STATIC_MODELS",
-        "JCODE_OPENROUTER_AUTH_HEADER",
-        "JCODE_OPENROUTER_AUTH_HEADER_NAME",
-        "JCODE_OPENROUTER_DYNAMIC_BEARER_PROVIDER",
-        "JCODE_OPENROUTER_PROVIDER",
-        "JCODE_OPENROUTER_NO_FALLBACK",
+        OPENAI_COMPAT_RUNTIME_PROVIDER_ID_ENV,
+        OPENAI_COMPAT_RUNTIME_PROVIDER_NAME_ENV,
+        OPENAI_COMPAT_RUNTIME_MODELS_DEV_PROVIDER_ENV,
         "JCODE_NAMED_PROVIDER_PROFILE",
         "JCODE_PROVIDER_PROFILE_ACTIVE",
         "JCODE_PROVIDER_PROFILE_NAME",
@@ -114,18 +269,60 @@ pub fn apply_openai_compatible_profile_env(profile: Option<OpenAiCompatibleProfi
 
     if let Some(profile) = profile {
         let resolved = resolve_openai_compatible_profile(profile);
-        crate::env::set_var("JCODE_OPENROUTER_API_BASE", &resolved.api_base);
-        crate::env::set_var("JCODE_OPENROUTER_API_KEY_NAME", &resolved.api_key_env);
-        crate::env::set_var("JCODE_OPENROUTER_ENV_FILE", &resolved.env_file);
-        crate::env::set_var("JCODE_OPENROUTER_CACHE_NAMESPACE", &resolved.id);
-        crate::env::set_var("JCODE_OPENROUTER_PROVIDER_FEATURES", "0");
+        set_openai_compat_runtime_var(
+            OPENAI_COMPAT_RUNTIME_API_BASE_ENV,
+            LEGACY_OPENROUTER_API_BASE_ENV,
+            &resolved.api_base,
+        );
+        set_openai_compat_runtime_var(
+            OPENAI_COMPAT_RUNTIME_API_KEY_NAME_ENV,
+            LEGACY_OPENROUTER_API_KEY_NAME_ENV,
+            &resolved.api_key_env,
+        );
+        set_openai_compat_runtime_var(
+            OPENAI_COMPAT_RUNTIME_ENV_FILE_ENV,
+            LEGACY_OPENROUTER_ENV_FILE_ENV,
+            &resolved.env_file,
+        );
+        set_openai_compat_runtime_var(
+            OPENAI_COMPAT_RUNTIME_CACHE_NAMESPACE_ENV,
+            LEGACY_OPENROUTER_CACHE_NAMESPACE_ENV,
+            &resolved.id,
+        );
+        crate::env::set_var(OPENAI_COMPAT_RUNTIME_PROVIDER_ID_ENV, &resolved.id);
+        crate::env::set_var(
+            OPENAI_COMPAT_RUNTIME_PROVIDER_NAME_ENV,
+            &resolved.display_name,
+        );
+        if let Some(models_dev_provider) = openai_compatible_models_dev_provider_id(&resolved.id) {
+            crate::env::set_var(
+                OPENAI_COMPAT_RUNTIME_MODELS_DEV_PROVIDER_ENV,
+                models_dev_provider,
+            );
+        }
+        set_openai_compat_runtime_var(
+            OPENAI_COMPAT_RUNTIME_PROVIDER_FEATURES_ENV,
+            LEGACY_OPENROUTER_PROVIDER_FEATURES_ENV,
+            "0",
+        );
         if let Some(model) = resolved.default_model.as_deref() {
-            crate::env::set_var("JCODE_OPENROUTER_MODEL", model);
+            set_openai_compat_runtime_var(
+                OPENAI_COMPAT_RUNTIME_MODEL_ENV,
+                LEGACY_OPENROUTER_MODEL_ENV,
+                model,
+            );
         }
         if resolved.requires_api_key {
-            crate::env::remove_var("JCODE_OPENROUTER_ALLOW_NO_AUTH");
+            remove_openai_compat_runtime_var(
+                OPENAI_COMPAT_RUNTIME_ALLOW_NO_AUTH_ENV,
+                LEGACY_OPENROUTER_ALLOW_NO_AUTH_ENV,
+            );
         } else {
-            crate::env::set_var("JCODE_OPENROUTER_ALLOW_NO_AUTH", "1");
+            set_openai_compat_runtime_var(
+                OPENAI_COMPAT_RUNTIME_ALLOW_NO_AUTH_ENV,
+                LEGACY_OPENROUTER_ALLOW_NO_AUTH_ENV,
+                "1",
+            );
         }
     }
 }
@@ -173,8 +370,36 @@ pub fn apply_named_provider_profile_env_from_config(
     crate::env::remove_var("JCODE_PROVIDER_PROFILE_NAME");
     crate::env::remove_var("JCODE_NAMED_PROVIDER_PROFILE");
     apply_openai_compatible_profile_env(None);
-    crate::env::set_var("JCODE_OPENROUTER_API_BASE", &api_base);
-    crate::env::set_var("JCODE_OPENROUTER_CACHE_NAMESPACE", profile_name);
+    let display_name = profile
+        .display_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .unwrap_or(profile_name);
+
+    set_openai_compat_runtime_var(
+        OPENAI_COMPAT_RUNTIME_API_BASE_ENV,
+        LEGACY_OPENROUTER_API_BASE_ENV,
+        &api_base,
+    );
+    set_openai_compat_runtime_var(
+        OPENAI_COMPAT_RUNTIME_CACHE_NAMESPACE_ENV,
+        LEGACY_OPENROUTER_CACHE_NAMESPACE_ENV,
+        profile_name,
+    );
+    crate::env::set_var(OPENAI_COMPAT_RUNTIME_PROVIDER_ID_ENV, profile_name);
+    crate::env::set_var(OPENAI_COMPAT_RUNTIME_PROVIDER_NAME_ENV, display_name);
+    if let Some(models_dev_provider) = profile
+        .models_dev_provider
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+    {
+        crate::env::set_var(
+            OPENAI_COMPAT_RUNTIME_MODELS_DEV_PROVIDER_ENV,
+            models_dev_provider,
+        );
+    }
     crate::env::set_var("JCODE_NAMED_PROVIDER_PROFILE", profile_name);
 
     let provider_features = matches!(
@@ -182,22 +407,21 @@ pub fn apply_named_provider_profile_env_from_config(
         crate::config::NamedProviderType::OpenRouter
     ) || profile.provider_routing
         || profile.allow_provider_pinning;
-    crate::env::set_var(
-        "JCODE_OPENROUTER_PROVIDER_FEATURES",
+    set_openai_compat_runtime_var(
+        OPENAI_COMPAT_RUNTIME_PROVIDER_FEATURES_ENV,
+        LEGACY_OPENROUTER_PROVIDER_FEATURES_ENV,
         if provider_features { "1" } else { "0" },
     );
-    crate::env::set_var(
-        "JCODE_OPENROUTER_MODEL_CATALOG",
-        if profile.model_catalog
-            || matches!(
-                profile.provider_type,
-                crate::config::NamedProviderType::OpenRouter
-            )
-        {
-            "1"
-        } else {
-            "0"
-        },
+    let model_catalog = profile.model_catalog
+        || profile.models_dev_provider.is_some()
+        || matches!(
+            profile.provider_type,
+            crate::config::NamedProviderType::OpenRouter
+        );
+    set_openai_compat_runtime_var(
+        OPENAI_COMPAT_RUNTIME_MODEL_CATALOG_ENV,
+        LEGACY_OPENROUTER_MODEL_CATALOG_ENV,
+        if model_catalog { "1" } else { "0" },
     );
 
     if let Some(model) = profile
@@ -206,7 +430,11 @@ pub fn apply_named_provider_profile_env_from_config(
         .map(str::trim)
         .filter(|v| !v.is_empty())
     {
-        crate::env::set_var("JCODE_OPENROUTER_MODEL", model);
+        set_openai_compat_runtime_var(
+            OPENAI_COMPAT_RUNTIME_MODEL_ENV,
+            LEGACY_OPENROUTER_MODEL_ENV,
+            model,
+        );
     }
 
     let static_models = profile
@@ -216,12 +444,20 @@ pub fn apply_named_provider_profile_env_from_config(
         .filter(|id| !id.is_empty())
         .collect::<Vec<_>>();
     if !static_models.is_empty() {
-        crate::env::set_var("JCODE_OPENROUTER_STATIC_MODELS", static_models.join("\n"));
+        set_openai_compat_runtime_var(
+            OPENAI_COMPAT_RUNTIME_STATIC_MODELS_ENV,
+            LEGACY_OPENROUTER_STATIC_MODELS_ENV,
+            static_models.join("\n"),
+        );
     }
 
     match profile.auth {
         crate::config::NamedProviderAuth::None => {
-            crate::env::set_var("JCODE_OPENROUTER_ALLOW_NO_AUTH", "1");
+            set_openai_compat_runtime_var(
+                OPENAI_COMPAT_RUNTIME_ALLOW_NO_AUTH_ENV,
+                LEGACY_OPENROUTER_ALLOW_NO_AUTH_ENV,
+                "1",
+            );
         }
         crate::config::NamedProviderAuth::Bearer | crate::config::NamedProviderAuth::Header => {
             let key_env = profile
@@ -250,7 +486,11 @@ pub fn apply_named_provider_profile_env_from_config(
                         key_env
                     );
                 }
-                crate::env::set_var("JCODE_OPENROUTER_API_KEY_NAME", &key_env);
+                set_openai_compat_runtime_var(
+                    OPENAI_COMPAT_RUNTIME_API_KEY_NAME_ENV,
+                    LEGACY_OPENROUTER_API_KEY_NAME_ENV,
+                    &key_env,
+                );
             }
 
             if let Some(env_file) = profile
@@ -266,29 +506,49 @@ pub fn apply_named_provider_profile_env_from_config(
                         env_file
                     );
                 }
-                crate::env::set_var("JCODE_OPENROUTER_ENV_FILE", env_file);
+                set_openai_compat_runtime_var(
+                    OPENAI_COMPAT_RUNTIME_ENV_FILE_ENV,
+                    LEGACY_OPENROUTER_ENV_FILE_ENV,
+                    env_file,
+                );
             }
 
             let requires_key = profile
                 .requires_api_key
                 .unwrap_or(!api_base_uses_localhost(&api_base));
             if !requires_key {
-                crate::env::set_var("JCODE_OPENROUTER_ALLOW_NO_AUTH", "1");
+                set_openai_compat_runtime_var(
+                    OPENAI_COMPAT_RUNTIME_ALLOW_NO_AUTH_ENV,
+                    LEGACY_OPENROUTER_ALLOW_NO_AUTH_ENV,
+                    "1",
+                );
             }
 
             match profile.auth {
                 crate::config::NamedProviderAuth::Bearer => {
-                    crate::env::set_var("JCODE_OPENROUTER_AUTH_HEADER", "bearer");
+                    set_openai_compat_runtime_var(
+                        OPENAI_COMPAT_RUNTIME_AUTH_HEADER_ENV,
+                        LEGACY_OPENROUTER_AUTH_HEADER_ENV,
+                        "bearer",
+                    );
                 }
                 crate::config::NamedProviderAuth::Header => {
-                    crate::env::set_var("JCODE_OPENROUTER_AUTH_HEADER", "api-key");
+                    set_openai_compat_runtime_var(
+                        OPENAI_COMPAT_RUNTIME_AUTH_HEADER_ENV,
+                        LEGACY_OPENROUTER_AUTH_HEADER_ENV,
+                        "api-key",
+                    );
                     if let Some(header) = profile
                         .auth_header
                         .as_deref()
                         .map(str::trim)
                         .filter(|v| !v.is_empty())
                     {
-                        crate::env::set_var("JCODE_OPENROUTER_AUTH_HEADER_NAME", header);
+                        set_openai_compat_runtime_var(
+                            OPENAI_COMPAT_RUNTIME_AUTH_HEADER_NAME_ENV,
+                            LEGACY_OPENROUTER_AUTH_HEADER_NAME_ENV,
+                            header,
+                        );
                     }
                 }
                 crate::config::NamedProviderAuth::None => {}
@@ -313,6 +573,15 @@ pub fn openrouter_like_api_key_sources() -> Vec<(String, String)> {
                 profile.env_file.to_string(),
             ));
         }
+    }
+
+    if let Some(source) = configured_api_key_source(
+        OPENAI_COMPAT_RUNTIME_API_KEY_NAME_ENV,
+        OPENAI_COMPAT_RUNTIME_ENV_FILE_ENV,
+        "OPENROUTER_API_KEY",
+        "openrouter.env",
+    ) {
+        sources.push(source);
     }
 
     if let Some(source) = configured_api_key_source(

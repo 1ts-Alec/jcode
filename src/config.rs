@@ -125,8 +125,11 @@ pub struct Config {
     /// Example:
     /// [providers.my-gateway]
     /// type = "openai-compatible"
+    /// display_name = "My Gateway"
     /// base_url = "https://llm.example.com/v1"
     /// api_key_env = "MY_GATEWAY_API_KEY"
+    /// default_model = "gateway/default-model"
+    /// models_dev_provider = "groq"
     pub providers: BTreeMap<String, NamedProviderConfig>,
 
     /// Agent-specific model defaults
@@ -182,6 +185,7 @@ pub struct NamedProviderModelConfig {
 pub struct NamedProviderConfig {
     #[serde(rename = "type")]
     pub provider_type: NamedProviderType,
+    pub display_name: Option<String>,
     pub base_url: String,
     pub api: Option<String>,
     pub auth: NamedProviderAuth,
@@ -191,6 +195,7 @@ pub struct NamedProviderConfig {
     pub env_file: Option<String>,
     pub default_model: Option<String>,
     pub requires_api_key: Option<bool>,
+    pub models_dev_provider: Option<String>,
     #[serde(default)]
     pub provider_routing: bool,
     #[serde(default)]
@@ -205,6 +210,7 @@ impl Default for NamedProviderConfig {
     fn default() -> Self {
         Self {
             provider_type: NamedProviderType::OpenAiCompatible,
+            display_name: None,
             base_url: String::new(),
             api: None,
             auth: NamedProviderAuth::Bearer,
@@ -214,6 +220,7 @@ impl Default for NamedProviderConfig {
             env_file: None,
             default_model: None,
             requires_api_key: None,
+            models_dev_provider: None,
             provider_routing: false,
             model_catalog: false,
             allow_provider_pinning: false,

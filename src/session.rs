@@ -672,7 +672,10 @@ pub fn derive_session_provider_key(provider_name: &str) -> Option<String> {
         return Some("jcode".to_string());
     }
 
-    if let Ok(namespace) = std::env::var("JCODE_OPENROUTER_CACHE_NAMESPACE") {
+    if let Some(namespace) = crate::provider_catalog::openai_compat_runtime_var(
+        crate::provider_catalog::OPENAI_COMPAT_RUNTIME_CACHE_NAMESPACE_ENV,
+        crate::provider_catalog::LEGACY_OPENROUTER_CACHE_NAMESPACE_ENV,
+    ) {
         let namespace = namespace.trim().to_ascii_lowercase();
         if !namespace.is_empty() {
             return Some(namespace);

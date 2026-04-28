@@ -137,6 +137,7 @@ fn test_init_provider_jcode_delegates_runtime_profile_to_wrapper() {
     let _guard = lock_env();
     let _env_guard = crate::storage::lock_test_env();
     crate::subscription_catalog::clear_runtime_env();
+    crate::env::remove_var(provider_catalog::OPENAI_COMPAT_RUNTIME_MODEL_ENV);
     crate::env::remove_var("JCODE_OPENROUTER_MODEL");
     crate::env::remove_var("JCODE_ACTIVE_PROVIDER");
     crate::env::remove_var("JCODE_FORCE_PROVIDER");
@@ -148,6 +149,12 @@ fn test_init_provider_jcode_delegates_runtime_profile_to_wrapper() {
 
     assert_eq!(provider.name(), "Jcode Subscription");
     assert!(crate::subscription_catalog::is_runtime_mode_enabled());
+    assert_eq!(
+        std::env::var(provider_catalog::OPENAI_COMPAT_RUNTIME_MODEL_ENV)
+            .ok()
+            .as_deref(),
+        Some(crate::subscription_catalog::default_model().id)
+    );
     assert_eq!(
         std::env::var("JCODE_OPENROUTER_MODEL").ok().as_deref(),
         Some(crate::subscription_catalog::default_model().id)
@@ -162,6 +169,7 @@ fn test_init_provider_jcode_delegates_runtime_profile_to_wrapper() {
     );
 
     crate::subscription_catalog::clear_runtime_env();
+    crate::env::remove_var(provider_catalog::OPENAI_COMPAT_RUNTIME_MODEL_ENV);
     crate::env::remove_var("JCODE_OPENROUTER_MODEL");
     crate::env::remove_var("JCODE_ACTIVE_PROVIDER");
     crate::env::remove_var("JCODE_FORCE_PROVIDER");

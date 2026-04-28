@@ -173,29 +173,62 @@ pub fn is_runtime_mode_enabled() -> bool {
 
 pub fn apply_runtime_env() {
     crate::env::set_var(JCODE_SUBSCRIPTION_ACTIVE_ENV, "1");
-    crate::env::set_var(
-        "JCODE_OPENROUTER_API_BASE",
+    provider_catalog::set_openai_compat_runtime_var(
+        provider_catalog::OPENAI_COMPAT_RUNTIME_API_BASE_ENV,
+        provider_catalog::LEGACY_OPENROUTER_API_BASE_ENV,
         configured_api_base().unwrap_or_else(|| DEFAULT_JCODE_API_BASE.to_string()),
     );
-    crate::env::set_var("JCODE_OPENROUTER_API_KEY_NAME", JCODE_API_KEY_ENV);
-    crate::env::set_var("JCODE_OPENROUTER_ENV_FILE", JCODE_ENV_FILE);
-    crate::env::set_var("JCODE_OPENROUTER_CACHE_NAMESPACE", JCODE_CACHE_NAMESPACE);
-    crate::env::set_var("JCODE_OPENROUTER_PROVIDER_FEATURES", "0");
-    crate::env::remove_var("JCODE_OPENROUTER_ALLOW_NO_AUTH");
-    crate::env::remove_var("JCODE_OPENROUTER_PROVIDER");
-    crate::env::remove_var("JCODE_OPENROUTER_NO_FALLBACK");
+    provider_catalog::set_openai_compat_runtime_var(
+        provider_catalog::OPENAI_COMPAT_RUNTIME_API_KEY_NAME_ENV,
+        provider_catalog::LEGACY_OPENROUTER_API_KEY_NAME_ENV,
+        JCODE_API_KEY_ENV,
+    );
+    provider_catalog::set_openai_compat_runtime_var(
+        provider_catalog::OPENAI_COMPAT_RUNTIME_ENV_FILE_ENV,
+        provider_catalog::LEGACY_OPENROUTER_ENV_FILE_ENV,
+        JCODE_ENV_FILE,
+    );
+    provider_catalog::set_openai_compat_runtime_var(
+        provider_catalog::OPENAI_COMPAT_RUNTIME_CACHE_NAMESPACE_ENV,
+        provider_catalog::LEGACY_OPENROUTER_CACHE_NAMESPACE_ENV,
+        JCODE_CACHE_NAMESPACE,
+    );
+    crate::env::set_var(
+        provider_catalog::OPENAI_COMPAT_RUNTIME_PROVIDER_ID_ENV,
+        JCODE_CACHE_NAMESPACE,
+    );
+    crate::env::set_var(
+        provider_catalog::OPENAI_COMPAT_RUNTIME_PROVIDER_NAME_ENV,
+        "Jcode Subscription",
+    );
+    crate::env::remove_var(provider_catalog::OPENAI_COMPAT_RUNTIME_MODELS_DEV_PROVIDER_ENV);
+    provider_catalog::set_openai_compat_runtime_var(
+        provider_catalog::OPENAI_COMPAT_RUNTIME_PROVIDER_FEATURES_ENV,
+        provider_catalog::LEGACY_OPENROUTER_PROVIDER_FEATURES_ENV,
+        "0",
+    );
+    provider_catalog::remove_openai_compat_runtime_var(
+        provider_catalog::OPENAI_COMPAT_RUNTIME_ALLOW_NO_AUTH_ENV,
+        provider_catalog::LEGACY_OPENROUTER_ALLOW_NO_AUTH_ENV,
+    );
+    provider_catalog::remove_openai_compat_runtime_var(
+        provider_catalog::OPENAI_COMPAT_RUNTIME_PROVIDER_ENV,
+        provider_catalog::LEGACY_OPENROUTER_PROVIDER_ENV,
+    );
+    provider_catalog::remove_openai_compat_runtime_var(
+        provider_catalog::OPENAI_COMPAT_RUNTIME_NO_FALLBACK_ENV,
+        provider_catalog::LEGACY_OPENROUTER_NO_FALLBACK_ENV,
+    );
 }
 
 pub fn clear_runtime_env() {
     crate::env::remove_var(JCODE_SUBSCRIPTION_ACTIVE_ENV);
-    crate::env::remove_var("JCODE_OPENROUTER_API_BASE");
-    crate::env::remove_var("JCODE_OPENROUTER_API_KEY_NAME");
-    crate::env::remove_var("JCODE_OPENROUTER_ENV_FILE");
-    crate::env::remove_var("JCODE_OPENROUTER_CACHE_NAMESPACE");
-    crate::env::remove_var("JCODE_OPENROUTER_PROVIDER_FEATURES");
-    crate::env::remove_var("JCODE_OPENROUTER_ALLOW_NO_AUTH");
-    crate::env::remove_var("JCODE_OPENROUTER_PROVIDER");
-    crate::env::remove_var("JCODE_OPENROUTER_NO_FALLBACK");
+    for (neutral, legacy) in provider_catalog::OPENAI_COMPAT_RUNTIME_ENV_PAIRS {
+        provider_catalog::remove_openai_compat_runtime_var(neutral, legacy);
+    }
+    crate::env::remove_var(provider_catalog::OPENAI_COMPAT_RUNTIME_PROVIDER_ID_ENV);
+    crate::env::remove_var(provider_catalog::OPENAI_COMPAT_RUNTIME_PROVIDER_NAME_ENV);
+    crate::env::remove_var(provider_catalog::OPENAI_COMPAT_RUNTIME_MODELS_DEV_PROVIDER_ENV);
 }
 
 #[cfg(test)]

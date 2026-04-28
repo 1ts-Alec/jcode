@@ -35,7 +35,61 @@ impl Drop for EnvVarGuard {
     }
 }
 
+fn clear_openai_compat_runtime_env() -> Vec<EnvVarGuard> {
+    [
+        crate::provider_catalog::OPENAI_COMPAT_RUNTIME_API_BASE_ENV,
+        crate::provider_catalog::OPENAI_COMPAT_RUNTIME_API_KEY_NAME_ENV,
+        crate::provider_catalog::OPENAI_COMPAT_RUNTIME_ENV_FILE_ENV,
+        crate::provider_catalog::OPENAI_COMPAT_RUNTIME_CACHE_NAMESPACE_ENV,
+        crate::provider_catalog::OPENAI_COMPAT_RUNTIME_PROVIDER_ID_ENV,
+        crate::provider_catalog::OPENAI_COMPAT_RUNTIME_PROVIDER_NAME_ENV,
+        crate::provider_catalog::OPENAI_COMPAT_RUNTIME_MODEL_ENV,
+        crate::provider_catalog::OPENAI_COMPAT_RUNTIME_STATIC_MODELS_ENV,
+        crate::provider_catalog::OPENAI_COMPAT_RUNTIME_MODEL_CATALOG_ENV,
+        crate::provider_catalog::OPENAI_COMPAT_RUNTIME_PROVIDER_FEATURES_ENV,
+        crate::provider_catalog::OPENAI_COMPAT_RUNTIME_ALLOW_NO_AUTH_ENV,
+        crate::provider_catalog::OPENAI_COMPAT_RUNTIME_AUTH_HEADER_ENV,
+        crate::provider_catalog::OPENAI_COMPAT_RUNTIME_AUTH_HEADER_NAME_ENV,
+        crate::provider_catalog::OPENAI_COMPAT_RUNTIME_DYNAMIC_BEARER_PROVIDER_ENV,
+        crate::provider_catalog::OPENAI_COMPAT_RUNTIME_PROVIDER_ENV,
+        crate::provider_catalog::OPENAI_COMPAT_RUNTIME_NO_FALLBACK_ENV,
+        crate::provider_catalog::OPENAI_COMPAT_RUNTIME_MODELS_DEV_PROVIDER_ENV,
+        crate::provider_catalog::LEGACY_OPENROUTER_API_BASE_ENV,
+        crate::provider_catalog::LEGACY_OPENROUTER_API_KEY_NAME_ENV,
+        crate::provider_catalog::LEGACY_OPENROUTER_ENV_FILE_ENV,
+        crate::provider_catalog::LEGACY_OPENROUTER_CACHE_NAMESPACE_ENV,
+        crate::provider_catalog::LEGACY_OPENROUTER_MODEL_ENV,
+        crate::provider_catalog::LEGACY_OPENROUTER_STATIC_MODELS_ENV,
+        crate::provider_catalog::LEGACY_OPENROUTER_MODEL_CATALOG_ENV,
+        crate::provider_catalog::LEGACY_OPENROUTER_PROVIDER_FEATURES_ENV,
+        crate::provider_catalog::LEGACY_OPENROUTER_ALLOW_NO_AUTH_ENV,
+        crate::provider_catalog::LEGACY_OPENROUTER_AUTH_HEADER_ENV,
+        crate::provider_catalog::LEGACY_OPENROUTER_AUTH_HEADER_NAME_ENV,
+        crate::provider_catalog::LEGACY_OPENROUTER_DYNAMIC_BEARER_PROVIDER_ENV,
+        crate::provider_catalog::LEGACY_OPENROUTER_PROVIDER_ENV,
+        crate::provider_catalog::LEGACY_OPENROUTER_NO_FALLBACK_ENV,
+    ]
+    .into_iter()
+    .map(EnvVarGuard::remove)
+    .collect()
+}
+
+fn clear_openai_compatible_api_key_env() -> Vec<EnvVarGuard> {
+    std::iter::once("OPENROUTER_API_KEY")
+        .chain(
+            crate::provider_catalog::openai_compatible_profiles()
+                .iter()
+                .map(|profile| profile.api_key_env),
+        )
+        .map(EnvVarGuard::remove)
+        .collect()
+}
+
 fn test_config_dir(temp: &TempDir) -> std::path::PathBuf {
+    if let Ok(jcode_home) = std::env::var("JCODE_HOME") {
+        return std::path::PathBuf::from(jcode_home).join("config");
+    }
+
     #[cfg(target_os = "macos")]
     {
         temp.path().join("Library").join("Application Support")
@@ -65,45 +119,51 @@ fn test_has_credentials() {
 #[test]
 fn test_configured_api_base_accepts_https() {
     let _lock = ENV_LOCK.lock().unwrap();
-    let prev = std::env::var("JCODE_OPENROUTER_API_BASE").ok();
+    let _runtime = clear_openai_compat_runtime_env();
     crate::env::set_var(
-        "JCODE_OPENROUTER_API_BASE",
+        crate::provider_catalog::LEGACY_OPENROUTER_API_BASE_ENV,
         "https://api.groq.com/openai/v1/",
     );
     assert_eq!(configured_api_base(), "https://api.groq.com/openai/v1");
-    if let Some(value) = prev {
-        crate::env::set_var("JCODE_OPENROUTER_API_BASE", value);
-    } else {
-        crate::env::remove_var("JCODE_OPENROUTER_API_BASE");
-    }
+}
+
+#[test]
+fn test_configured_api_base_prefers_neutral_runtime_env_over_legacy_alias() {
+    let _lock = ENV_LOCK.lock().unwrap();
+    let _runtime = clear_openai_compat_runtime_env();
+    crate::env::set_var(
+        crate::provider_catalog::LEGACY_OPENROUTER_API_BASE_ENV,
+        "https://legacy.example.com/v1",
+    );
+    crate::env::set_var(
+        crate::provider_catalog::OPENAI_COMPAT_RUNTIME_API_BASE_ENV,
+        "https://neutral.example.com/v1/",
+    );
+
+    assert_eq!(configured_api_base(), "https://neutral.example.com/v1");
 }
 
 #[test]
 fn test_configured_api_base_rejects_insecure_http_remote() {
     let _lock = ENV_LOCK.lock().unwrap();
-    let prev = std::env::var("JCODE_OPENROUTER_API_BASE").ok();
-    crate::env::set_var("JCODE_OPENROUTER_API_BASE", "http://example.com/v1");
+    let _runtime = clear_openai_compat_runtime_env();
+    crate::env::set_var(
+        crate::provider_catalog::LEGACY_OPENROUTER_API_BASE_ENV,
+        "http://example.com/v1",
+    );
     assert_eq!(configured_api_base(), DEFAULT_API_BASE);
-    if let Some(value) = prev {
-        crate::env::set_var("JCODE_OPENROUTER_API_BASE", value);
-    } else {
-        crate::env::remove_var("JCODE_OPENROUTER_API_BASE");
-    }
 }
 
 #[test]
 fn autodetects_single_saved_openai_compatible_profile() {
     let _lock = ENV_LOCK.lock().unwrap();
+    let _runtime = clear_openai_compat_runtime_env();
     let temp = TempDir::new().expect("create temp dir");
+    let _jcode_home = EnvVarGuard::set("JCODE_HOME", temp.path());
     let _xdg = EnvVarGuard::set("XDG_CONFIG_HOME", temp.path());
     let _home = EnvVarGuard::set("HOME", temp.path());
     let _appdata = EnvVarGuard::set("APPDATA", temp.path().join("AppData").join("Roaming"));
-    let _openrouter_base = EnvVarGuard::remove("JCODE_OPENROUTER_API_BASE");
-    let _openrouter_key = EnvVarGuard::remove("JCODE_OPENROUTER_API_KEY_NAME");
-    let _openrouter_file = EnvVarGuard::remove("JCODE_OPENROUTER_ENV_FILE");
-    let _openrouter_dynamic = EnvVarGuard::remove("JCODE_OPENROUTER_DYNAMIC_BEARER_PROVIDER");
-    let _openrouter_api_key = EnvVarGuard::remove("OPENROUTER_API_KEY");
-    let _opencode_api_key = EnvVarGuard::remove("OPENCODE_API_KEY");
+    let _api_keys = clear_openai_compatible_api_key_env();
 
     let opencode = crate::provider_catalog::resolve_openai_compatible_profile(
         crate::provider_catalog::OPENCODE_PROFILE,
@@ -124,17 +184,13 @@ fn autodetects_single_saved_openai_compatible_profile() {
 #[test]
 fn autodetects_single_saved_local_openai_compatible_profile() {
     let _lock = ENV_LOCK.lock().unwrap();
+    let _runtime = clear_openai_compat_runtime_env();
     let temp = TempDir::new().expect("create temp dir");
+    let _jcode_home = EnvVarGuard::set("JCODE_HOME", temp.path());
     let _xdg = EnvVarGuard::set("XDG_CONFIG_HOME", temp.path());
     let _home = EnvVarGuard::set("HOME", temp.path());
     let _appdata = EnvVarGuard::set("APPDATA", temp.path().join("AppData").join("Roaming"));
-    let _openrouter_base = EnvVarGuard::remove("JCODE_OPENROUTER_API_BASE");
-    let _openrouter_key = EnvVarGuard::remove("JCODE_OPENROUTER_API_KEY_NAME");
-    let _openrouter_file = EnvVarGuard::remove("JCODE_OPENROUTER_ENV_FILE");
-    let _openrouter_dynamic = EnvVarGuard::remove("JCODE_OPENROUTER_DYNAMIC_BEARER_PROVIDER");
-    let _openrouter_no_auth = EnvVarGuard::remove("JCODE_OPENROUTER_ALLOW_NO_AUTH");
-    let _openrouter_api_key = EnvVarGuard::remove("OPENROUTER_API_KEY");
-    let _lmstudio_api_key = EnvVarGuard::remove("LMSTUDIO_API_KEY");
+    let _api_keys = clear_openai_compatible_api_key_env();
 
     let lmstudio = crate::provider_catalog::resolve_openai_compatible_profile(
         crate::provider_catalog::LMSTUDIO_PROFILE,
@@ -160,17 +216,13 @@ fn autodetects_single_saved_local_openai_compatible_profile() {
 #[test]
 fn does_not_guess_when_multiple_saved_openai_compatible_profiles_exist() {
     let _lock = ENV_LOCK.lock().unwrap();
+    let _runtime = clear_openai_compat_runtime_env();
     let temp = TempDir::new().expect("create temp dir");
+    let _jcode_home = EnvVarGuard::set("JCODE_HOME", temp.path());
     let _xdg = EnvVarGuard::set("XDG_CONFIG_HOME", temp.path());
     let _home = EnvVarGuard::set("HOME", temp.path());
     let _appdata = EnvVarGuard::set("APPDATA", temp.path().join("AppData").join("Roaming"));
-    let _openrouter_base = EnvVarGuard::remove("JCODE_OPENROUTER_API_BASE");
-    let _openrouter_key = EnvVarGuard::remove("JCODE_OPENROUTER_API_KEY_NAME");
-    let _openrouter_file = EnvVarGuard::remove("JCODE_OPENROUTER_ENV_FILE");
-    let _openrouter_dynamic = EnvVarGuard::remove("JCODE_OPENROUTER_DYNAMIC_BEARER_PROVIDER");
-    let _openrouter_api_key = EnvVarGuard::remove("OPENROUTER_API_KEY");
-    let _opencode_api_key = EnvVarGuard::remove("OPENCODE_API_KEY");
-    let _chutes_api_key = EnvVarGuard::remove("CHUTES_API_KEY");
+    let _api_keys = clear_openai_compatible_api_key_env();
 
     let opencode = crate::provider_catalog::resolve_openai_compatible_profile(
         crate::provider_catalog::OPENCODE_PROFILE,
@@ -200,17 +252,13 @@ fn does_not_guess_when_multiple_saved_openai_compatible_profiles_exist() {
 #[test]
 fn autodetected_profile_seeds_default_model_and_cache_namespace() {
     let _lock = ENV_LOCK.lock().unwrap();
+    let _runtime = clear_openai_compat_runtime_env();
     let temp = TempDir::new().expect("create temp dir");
+    let _jcode_home = EnvVarGuard::set("JCODE_HOME", temp.path());
     let _xdg = EnvVarGuard::set("XDG_CONFIG_HOME", temp.path());
     let _home = EnvVarGuard::set("HOME", temp.path());
     let _appdata = EnvVarGuard::set("APPDATA", temp.path().join("AppData").join("Roaming"));
-    let _openrouter_base = EnvVarGuard::remove("JCODE_OPENROUTER_API_BASE");
-    let _openrouter_key = EnvVarGuard::remove("JCODE_OPENROUTER_API_KEY_NAME");
-    let _openrouter_file = EnvVarGuard::remove("JCODE_OPENROUTER_ENV_FILE");
-    let _openrouter_dynamic = EnvVarGuard::remove("JCODE_OPENROUTER_DYNAMIC_BEARER_PROVIDER");
-    let _openrouter_model = EnvVarGuard::remove("JCODE_OPENROUTER_MODEL");
-    let _openrouter_cache_ns = EnvVarGuard::remove("JCODE_OPENROUTER_CACHE_NAMESPACE");
-    let _zhipu = EnvVarGuard::remove("ZHIPU_API_KEY");
+    let _api_keys = clear_openai_compatible_api_key_env();
 
     let zai = crate::provider_catalog::resolve_openai_compatible_profile(
         crate::provider_catalog::ZAI_PROFILE,
@@ -220,11 +268,101 @@ fn autodetected_profile_seeds_default_model_and_cache_namespace() {
     let provider = OpenRouterProvider::new().expect("provider");
     assert_eq!(provider.model.blocking_read().clone(), "glm-4.5");
     assert_eq!(
+        std::env::var(crate::provider_catalog::OPENAI_COMPAT_RUNTIME_CACHE_NAMESPACE_ENV)
+            .ok()
+            .as_deref(),
+        Some("zai")
+    );
+    assert_eq!(
         std::env::var("JCODE_OPENROUTER_CACHE_NAMESPACE")
             .ok()
             .as_deref(),
         Some("zai")
     );
+    assert_eq!(provider.compatible_provider_display_name(), "Z.AI");
+}
+
+#[test]
+fn runtime_provider_identity_uses_neutral_display_name() {
+    let _lock = ENV_LOCK.lock().unwrap();
+    let _runtime = clear_openai_compat_runtime_env();
+    crate::env::set_var(
+        crate::provider_catalog::OPENAI_COMPAT_RUNTIME_API_BASE_ENV,
+        "https://gateway.example.test/v1",
+    );
+    crate::env::set_var(
+        crate::provider_catalog::OPENAI_COMPAT_RUNTIME_PROVIDER_FEATURES_ENV,
+        "0",
+    );
+    crate::env::set_var(
+        crate::provider_catalog::OPENAI_COMPAT_RUNTIME_ALLOW_NO_AUTH_ENV,
+        "1",
+    );
+    crate::env::set_var(
+        crate::provider_catalog::OPENAI_COMPAT_RUNTIME_PROVIDER_ID_ENV,
+        "gateway",
+    );
+    crate::env::set_var(
+        crate::provider_catalog::OPENAI_COMPAT_RUNTIME_PROVIDER_NAME_ENV,
+        "Gateway Labs",
+    );
+
+    let provider = OpenRouterProvider::new().expect("provider");
+
+    assert_eq!(provider.provider_id, "gateway");
+    assert_eq!(provider.compatible_provider_display_name(), "Gateway Labs");
+}
+
+#[test]
+fn models_dev_parser_extracts_context_and_pricing() {
+    let data = serde_json::json!({
+        "gateway": {
+            "models": {
+                "fallback/model": {
+                    "name": "Fallback Model",
+                    "limit": { "context": 123456 },
+                    "cost": {
+                        "input": 2.0,
+                        "output": 8.0,
+                        "cache_read": 0.5
+                    }
+                },
+                "ignored": {
+                    "id": "  "
+                },
+                "real-key": {
+                    "id": "provider/model",
+                    "name": "Provider Model",
+                    "limit": { "context": 654321 }
+                }
+            }
+        }
+    });
+
+    let models = parse_models_dev_model_infos(&data, "gateway");
+
+    assert_eq!(models.len(), 2);
+    let fallback = models
+        .iter()
+        .find(|model| model.id == "fallback/model")
+        .expect("fallback model");
+    assert_eq!(fallback.name, "Fallback Model");
+    assert_eq!(fallback.context_length, Some(123456));
+    assert_eq!(fallback.pricing.prompt.as_deref(), Some("0.000002000000"));
+    assert_eq!(
+        fallback.pricing.completion.as_deref(),
+        Some("0.000008000000")
+    );
+    assert_eq!(
+        fallback.pricing.input_cache_read.as_deref(),
+        Some("0.000000500000")
+    );
+    let provider_model = models
+        .iter()
+        .find(|model| model.id == "provider/model")
+        .expect("provider model");
+    assert_eq!(provider_model.name, "Provider Model");
+    assert_eq!(provider_model.context_length, Some(654321));
 }
 
 #[test]
@@ -285,6 +423,9 @@ fn make_provider() -> OpenRouterProvider {
             token: "test".to_string(),
             label: DEFAULT_API_KEY_NAME.to_string(),
         },
+        provider_id: "openrouter".to_string(),
+        provider_display_name: "OpenRouter".to_string(),
+        models_dev_provider_id: None,
         supports_provider_features: true,
         supports_model_catalog: true,
         static_models: Vec::new(),
@@ -307,6 +448,9 @@ fn make_custom_compatible_provider() -> OpenRouterProvider {
             token: "test".to_string(),
             label: "OPENAI_COMPAT_API_KEY".to_string(),
         },
+        provider_id: "custom-compatible".to_string(),
+        provider_display_name: "Custom Compatible".to_string(),
+        models_dev_provider_id: None,
         supports_provider_features: false,
         supports_model_catalog: true,
         static_models: Vec::new(),
@@ -336,6 +480,26 @@ fn custom_compatible_provider_preserves_at_sign_model_ids() {
     provider.set_model("gpt-5.4@OpenAI").unwrap();
 
     assert_eq!(provider.model(), "gpt-5.4@OpenAI");
+}
+
+#[test]
+fn custom_compatible_static_models_are_displayed_before_catalog_fetch() {
+    let _lock = ENV_LOCK.lock().unwrap();
+    let _runtime = clear_openai_compat_runtime_env();
+    let namespace = format!("jcode-test-static-fallback-{}", std::process::id());
+    let _namespace = EnvVarGuard::set(
+        crate::provider_catalog::OPENAI_COMPAT_RUNTIME_CACHE_NAMESPACE_ENV,
+        &namespace,
+    );
+    let provider = OpenRouterProvider {
+        static_models: vec!["custom/model-a".to_string(), "custom/model-b".to_string()],
+        ..make_custom_compatible_provider()
+    };
+
+    let models = provider.available_models_display();
+
+    assert!(models.contains(&"custom/model-a".to_string()), "{models:?}");
+    assert!(models.contains(&"custom/model-b".to_string()), "{models:?}");
 }
 
 #[test]

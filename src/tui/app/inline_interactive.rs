@@ -331,6 +331,7 @@ impl App {
             signature,
             picker_started,
             receiver: rx,
+            agent_model_target: None,
         });
     }
 
@@ -386,6 +387,7 @@ impl App {
 
         match received {
             Ok(result) => {
+                let agent_model_target = pending.agent_model_target;
                 self.open_model_picker_with_routes(
                     pending.signature,
                     pending.picker_started,
@@ -393,6 +395,9 @@ impl App {
                     result.routes_ms,
                     true,
                 );
+                if let Some(target) = agent_model_target {
+                    self.configure_agent_model_picker(target);
+                }
                 self.set_status_notice("Model list updated");
                 true
             }

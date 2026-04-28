@@ -26,8 +26,9 @@ impl JcodeProvider {
     }
 
     fn apply_runtime_profile() {
-        crate::env::set_var(
-            "JCODE_OPENROUTER_MODEL",
+        crate::provider_catalog::set_openai_compat_runtime_var(
+            crate::provider_catalog::OPENAI_COMPAT_RUNTIME_MODEL_ENV,
+            crate::provider_catalog::LEGACY_OPENROUTER_MODEL_ENV,
             crate::subscription_catalog::default_model().id,
         );
         crate::env::set_var("JCODE_ACTIVE_PROVIDER", "openrouter");

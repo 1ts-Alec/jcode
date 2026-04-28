@@ -169,6 +169,18 @@ cross_provider_failover = "countdown"
 # Set to "zero" if you have premium Copilot and want free requests
 # copilot_premium = "zero"
 
+# Optional first-class OpenAI-compatible provider profiles.
+# Select with `jcode --provider-profile my-gateway`.
+# [providers.my-gateway]
+# type = "openai-compatible"
+# display_name = "My Gateway"
+# base_url = "https://llm.example.com/v1"
+# auth = "bearer" # bearer|header|none
+# api_key_env = "MY_GATEWAY_API_KEY"
+# default_model = "gateway/default-model"
+# model_catalog = true
+# models_dev_provider = "groq" # optional models.dev provider id for catalog metadata
+
 [ambient]
 # Ambient mode: background agent that maintains your codebase
 # Enable ambient mode (default: false)

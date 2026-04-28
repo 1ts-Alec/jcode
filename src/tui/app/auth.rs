@@ -1569,7 +1569,11 @@ impl App {
                                 .and_then(|resolved| resolved.default_model.as_deref())
                                 .or(default_model.as_deref())
                             {
-                                crate::env::set_var("JCODE_OPENROUTER_MODEL", default_model);
+                                crate::provider_catalog::set_openai_compat_runtime_var(
+                                    crate::provider_catalog::OPENAI_COMPAT_RUNTIME_MODEL_ENV,
+                                    crate::provider_catalog::LEGACY_OPENROUTER_MODEL_ENV,
+                                    default_model,
+                                );
                             }
                         }
 

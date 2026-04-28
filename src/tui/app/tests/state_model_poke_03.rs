@@ -419,6 +419,7 @@ fn test_agent_model_picker_openrouter_bare_openai_route_saves_openai_catalog_pre
     let (mut app, _set_model_calls) = create_openrouter_spec_capture_test_app();
 
     app.open_agent_model_picker(crate::tui::AgentModelTarget::Swarm);
+    wait_for_model_picker_load(&mut app);
 
     let picker = app
         .inline_interactive_state

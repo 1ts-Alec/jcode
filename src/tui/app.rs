@@ -117,6 +117,7 @@ struct PendingModelPickerLoad {
     signature: ModelPickerCacheSignature,
     picker_started: Instant,
     receiver: mpsc::Receiver<anyhow::Result<ModelPickerRoutesResult>>,
+    agent_model_target: Option<super::AgentModelTarget>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

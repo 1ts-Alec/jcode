@@ -1,7 +1,17 @@
 use anyhow::Result;
 
 use crate::provider_catalog::{
+    LEGACY_OPENROUTER_API_BASE_ENV, LEGACY_OPENROUTER_API_KEY_NAME_ENV,
+    LEGACY_OPENROUTER_AUTH_HEADER_ENV, LEGACY_OPENROUTER_CACHE_NAMESPACE_ENV,
+    LEGACY_OPENROUTER_DYNAMIC_BEARER_PROVIDER_ENV, LEGACY_OPENROUTER_ENV_FILE_ENV,
+    LEGACY_OPENROUTER_MODEL_CATALOG_ENV, LEGACY_OPENROUTER_PROVIDER_FEATURES_ENV,
+    OPENAI_COMPAT_RUNTIME_API_BASE_ENV, OPENAI_COMPAT_RUNTIME_API_KEY_NAME_ENV,
+    OPENAI_COMPAT_RUNTIME_AUTH_HEADER_ENV, OPENAI_COMPAT_RUNTIME_CACHE_NAMESPACE_ENV,
+    OPENAI_COMPAT_RUNTIME_DYNAMIC_BEARER_PROVIDER_ENV, OPENAI_COMPAT_RUNTIME_ENV_FILE_ENV,
+    OPENAI_COMPAT_RUNTIME_MODEL_CATALOG_ENV, OPENAI_COMPAT_RUNTIME_PROVIDER_FEATURES_ENV,
+    OPENAI_COMPAT_RUNTIME_PROVIDER_ID_ENV, OPENAI_COMPAT_RUNTIME_PROVIDER_NAME_ENV,
     load_api_key_from_env_or_config, load_env_value_from_env_or_config, normalize_api_base,
+    remove_openai_compat_runtime_var, set_openai_compat_runtime_var,
 };
 
 pub const ENV_FILE: &str = "azure-openai.env";
@@ -75,19 +85,61 @@ pub fn apply_runtime_env() -> Result<()> {
         )
     })?;
 
-    crate::env::set_var("JCODE_OPENROUTER_API_BASE", endpoint);
-    crate::env::set_var("JCODE_OPENROUTER_API_KEY_NAME", API_KEY_ENV);
-    crate::env::set_var("JCODE_OPENROUTER_ENV_FILE", ENV_FILE);
-    crate::env::set_var("JCODE_OPENROUTER_CACHE_NAMESPACE", "azure-openai");
-    crate::env::set_var("JCODE_OPENROUTER_PROVIDER_FEATURES", "0");
-    crate::env::set_var("JCODE_OPENROUTER_MODEL_CATALOG", "0");
+    set_openai_compat_runtime_var(
+        OPENAI_COMPAT_RUNTIME_API_BASE_ENV,
+        LEGACY_OPENROUTER_API_BASE_ENV,
+        endpoint,
+    );
+    set_openai_compat_runtime_var(
+        OPENAI_COMPAT_RUNTIME_API_KEY_NAME_ENV,
+        LEGACY_OPENROUTER_API_KEY_NAME_ENV,
+        API_KEY_ENV,
+    );
+    set_openai_compat_runtime_var(
+        OPENAI_COMPAT_RUNTIME_ENV_FILE_ENV,
+        LEGACY_OPENROUTER_ENV_FILE_ENV,
+        ENV_FILE,
+    );
+    set_openai_compat_runtime_var(
+        OPENAI_COMPAT_RUNTIME_CACHE_NAMESPACE_ENV,
+        LEGACY_OPENROUTER_CACHE_NAMESPACE_ENV,
+        "azure-openai",
+    );
+    crate::env::set_var(OPENAI_COMPAT_RUNTIME_PROVIDER_ID_ENV, "azure-openai");
+    crate::env::set_var(OPENAI_COMPAT_RUNTIME_PROVIDER_NAME_ENV, "Azure OpenAI");
+    crate::env::remove_var(crate::provider_catalog::OPENAI_COMPAT_RUNTIME_MODELS_DEV_PROVIDER_ENV);
+    set_openai_compat_runtime_var(
+        OPENAI_COMPAT_RUNTIME_PROVIDER_FEATURES_ENV,
+        LEGACY_OPENROUTER_PROVIDER_FEATURES_ENV,
+        "0",
+    );
+    set_openai_compat_runtime_var(
+        OPENAI_COMPAT_RUNTIME_MODEL_CATALOG_ENV,
+        LEGACY_OPENROUTER_MODEL_CATALOG_ENV,
+        "0",
+    );
 
     if uses_entra_id() {
-        crate::env::set_var("JCODE_OPENROUTER_AUTH_HEADER", "authorization-bearer");
-        crate::env::set_var("JCODE_OPENROUTER_DYNAMIC_BEARER_PROVIDER", "azure");
+        set_openai_compat_runtime_var(
+            OPENAI_COMPAT_RUNTIME_AUTH_HEADER_ENV,
+            LEGACY_OPENROUTER_AUTH_HEADER_ENV,
+            "authorization-bearer",
+        );
+        set_openai_compat_runtime_var(
+            OPENAI_COMPAT_RUNTIME_DYNAMIC_BEARER_PROVIDER_ENV,
+            LEGACY_OPENROUTER_DYNAMIC_BEARER_PROVIDER_ENV,
+            "azure",
+        );
     } else {
-        crate::env::set_var("JCODE_OPENROUTER_AUTH_HEADER", "api-key");
-        crate::env::remove_var("JCODE_OPENROUTER_DYNAMIC_BEARER_PROVIDER");
+        set_openai_compat_runtime_var(
+            OPENAI_COMPAT_RUNTIME_AUTH_HEADER_ENV,
+            LEGACY_OPENROUTER_AUTH_HEADER_ENV,
+            "api-key",
+        );
+        remove_openai_compat_runtime_var(
+            OPENAI_COMPAT_RUNTIME_DYNAMIC_BEARER_PROVIDER_ENV,
+            LEGACY_OPENROUTER_DYNAMIC_BEARER_PROVIDER_ENV,
+        );
     }
 
     Ok(())

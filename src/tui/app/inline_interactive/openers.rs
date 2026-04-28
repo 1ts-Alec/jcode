@@ -109,9 +109,16 @@ impl App {
     }
 
     pub(crate) fn open_agent_model_picker(&mut self, target: AgentModelTarget) {
+        self.open_model_picker();
+        if let Some(pending) = self.pending_model_picker_load.as_mut() {
+            pending.agent_model_target = Some(target);
+        }
+        self.configure_agent_model_picker(target);
+    }
+
+    pub(super) fn configure_agent_model_picker(&mut self, target: AgentModelTarget) {
         let configured = load_agent_model_override(target);
         let inherit_summary = agent_model_default_summary(target, self);
-        self.open_model_picker();
 
         if let Some(ref mut picker) = self.inline_interactive_state {
             if target == AgentModelTarget::Memory {
