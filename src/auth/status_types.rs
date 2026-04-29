@@ -1,5 +1,14 @@
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpenAiCompatibleAuthStatus {
+    pub id: String,
+    pub display_name: String,
+    pub compact_label: String,
+    pub state: AuthState,
+    pub method_detail: String,
+}
+
 /// Authentication status for all supported providers
 #[derive(Debug, Clone, Default)]
 pub struct AuthStatus {
@@ -35,6 +44,8 @@ pub struct AuthStatus {
     pub google: AuthState,
     /// Google Gmail has send capability (Full tier)
     pub google_can_send: bool,
+    /// Individually configured OpenAI-compatible providers.
+    pub openai_compatible: Vec<OpenAiCompatibleAuthStatus>,
 }
 
 /// Auth state for Anthropic which has multiple auth methods

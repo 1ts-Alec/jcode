@@ -152,6 +152,15 @@ pub(super) fn build_auth_status_line(auth: &AuthStatus, max_width: usize) -> Lin
         provider_label("ge", auth.gemini, None)
     };
 
+    let compatible_full_specs = auth
+        .openai_compatible
+        .iter()
+        .map(|status| (status.display_name.clone(), status.state));
+    let compatible_compact_specs = auth
+        .openai_compatible
+        .iter()
+        .map(|status| (status.compact_label.clone(), status.state));
+
     let full_specs: Vec<(String, AuthState)> = vec![
         (anthropic_label, auth.anthropic.state),
         ("openrouter".to_string(), auth.openrouter),
@@ -165,6 +174,7 @@ pub(super) fn build_auth_status_line(auth: &AuthStatus, max_width: usize) -> Lin
         ),
     ]
     .into_iter()
+    .chain(compatible_full_specs)
     .filter(|(_, state)| *state != AuthState::NotConfigured)
     .collect();
 
@@ -184,6 +194,7 @@ pub(super) fn build_auth_status_line(auth: &AuthStatus, max_width: usize) -> Lin
         ),
     ]
     .into_iter()
+    .chain(compatible_compact_specs)
     .filter(|(_, state)| *state != AuthState::NotConfigured)
     .collect();
 
@@ -301,7 +312,7 @@ fn version_display_candidates() -> Vec<String> {
 
 #[cfg(test)]
 fn configured_auth_count(auth: &AuthStatus) -> usize {
-    [
+    let fixed_count = [
         auth.jcode,
         auth.anthropic.state,
         auth.openrouter,
@@ -315,7 +326,13 @@ fn configured_auth_count(auth: &AuthStatus) -> usize {
     ]
     .into_iter()
     .filter(|state| *state != AuthState::NotConfigured)
-    .count()
+    .count();
+    fixed_count
+        + auth
+            .openai_compatible
+            .iter()
+            .filter(|status| status.state != AuthState::NotConfigured)
+            .count()
 }
 
 pub(super) fn build_persistent_header(app: &dyn TuiState, width: u16) -> Vec<Line<'static>> {
@@ -699,7 +716,7 @@ pub(crate) fn build_header_lines(app: &dyn TuiState, width: u16) -> Vec<Line<'st
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::auth::{AuthState, AuthStatus, ProviderAuth};
+    use crate::auth::{AuthState, AuthStatus, OpenAiCompatibleAuthStatus, ProviderAuth};
     use crate::message::Message;
     use crate::provider::{EventStream, Provider};
     use crate::tool::Registry;
@@ -800,7 +817,7 @@ mod tests {
     #[test]
     fn version_display_candidates_compact_for_narrow_width() {
         let rendered = choose_header_candidate(8, version_display_candidates());
-        assert_eq!(rendered, "v0.9");
+        assert_eq!(rendered, "v0.10");
     }
 
     #[test]
@@ -917,6 +934,30 @@ mod tests {
         assert!(!rendered.contains("openrouter"), "rendered: {rendered}");
         assert!(!rendered.contains("copilot"), "rendered: {rendered}");
         assert!(!rendered.contains("cursor"), "rendered: {rendered}");
+    }
+
+    #[test]
+    fn auth_status_line_shows_openai_compatible_provider_identity() {
+        let auth = AuthStatus {
+            openai_compatible: vec![OpenAiCompatibleAuthStatus {
+                id: "ollama-cloud".to_string(),
+                display_name: "Ollama Cloud".to_string(),
+                compact_label: "oc".to_string(),
+                state: AuthState::Available,
+                method_detail: "API key (`OLLAMA_API_KEY`)".to_string(),
+            }],
+            ..AuthStatus::default()
+        };
+
+        let line = build_auth_status_line(&auth, 120);
+        let rendered = line
+            .spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect::<String>();
+
+        assert!(rendered.contains("Ollama Cloud"), "rendered: {rendered}");
+        assert!(!rendered.contains("openrouter"), "rendered: {rendered}");
     }
 
     #[test]

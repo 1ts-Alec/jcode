@@ -61,6 +61,45 @@ fn auth_status_default_all_not_configured() {
     assert!(!status.copilot_has_api_token);
     assert!(!status.anthropic.has_oauth);
     assert!(!status.anthropic.has_api_key);
+    assert!(status.openai_compatible.is_empty());
+}
+
+#[test]
+fn auth_status_tracks_openai_compatible_profiles_separately_from_openrouter() {
+    let _guard = crate::storage::lock_test_env();
+    let temp = tempfile::tempdir().expect("tempdir");
+    let prev_home = std::env::var_os("JCODE_HOME");
+    let prev_openrouter_key = std::env::var_os("OPENROUTER_API_KEY");
+    let prev_ollama_key = std::env::var_os("OLLAMA_API_KEY");
+    crate::env::set_var("JCODE_HOME", temp.path());
+    crate::env::remove_var("OPENROUTER_API_KEY");
+    crate::env::remove_var("OLLAMA_API_KEY");
+    AuthStatus::invalidate_cache();
+
+    let config_dir = temp.path().join("config").join("jcode");
+    std::fs::create_dir_all(&config_dir).expect("config dir");
+    std::fs::write(
+        config_dir.join("ollama-cloud.env"),
+        "OLLAMA_API_KEY=test-ollama-key\n",
+    )
+    .expect("write ollama key");
+
+    let status = AuthStatus::check_uncached_fast();
+    assert_eq!(status.openrouter, AuthState::NotConfigured);
+    assert!(
+        status
+            .openai_compatible
+            .iter()
+            .any(|provider| provider.id == "ollama-cloud"
+                && provider.display_name == "Ollama Cloud"
+                && provider.state == AuthState::Available),
+        "status should include Ollama Cloud separately: {status:?}"
+    );
+
+    AuthStatus::invalidate_cache();
+    restore_env_var("JCODE_HOME", prev_home);
+    restore_env_var("OPENROUTER_API_KEY", prev_openrouter_key);
+    restore_env_var("OLLAMA_API_KEY", prev_ollama_key);
 }
 
 #[test]

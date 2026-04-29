@@ -52,6 +52,29 @@ fn with_env_var<T>(key: &str, value: &str, f: impl FnOnce() -> T) -> T {
     result
 }
 
+struct EnvVarGuard {
+    key: &'static str,
+    previous: Option<std::ffi::OsString>,
+}
+
+impl EnvVarGuard {
+    fn set(key: &'static str, value: impl AsRef<std::ffi::OsStr>) -> Self {
+        let previous = std::env::var_os(key);
+        crate::env::set_var(key, value);
+        Self { key, previous }
+    }
+}
+
+impl Drop for EnvVarGuard {
+    fn drop(&mut self) {
+        if let Some(previous) = &self.previous {
+            crate::env::set_var(self.key, previous);
+        } else {
+            crate::env::remove_var(self.key);
+        }
+    }
+}
+
 fn test_multi_provider_with_cursor() -> MultiProvider {
     MultiProvider {
         claude: RwLock::new(None),
@@ -67,6 +90,74 @@ fn test_multi_provider_with_cursor() -> MultiProvider {
         startup_notices: RwLock::new(Vec::new()),
         forced_provider: None,
     }
+}
+
+#[test]
+fn openai_compatible_routes_do_not_inject_openrouter_fallbacks() {
+    with_clean_provider_test_env(|| {
+        let _api_base = EnvVarGuard::set(
+            crate::provider_catalog::OPENAI_COMPAT_RUNTIME_API_BASE_ENV,
+            "https://ollama.com/v1",
+        );
+        let _key_name = EnvVarGuard::set(
+            crate::provider_catalog::OPENAI_COMPAT_RUNTIME_API_KEY_NAME_ENV,
+            "OLLAMA_API_KEY",
+        );
+        let _api_key = EnvVarGuard::set("OLLAMA_API_KEY", "test-key");
+        let _env_file = EnvVarGuard::set(
+            crate::provider_catalog::OPENAI_COMPAT_RUNTIME_ENV_FILE_ENV,
+            "ollama-cloud.env",
+        );
+        let _cache = EnvVarGuard::set(
+            crate::provider_catalog::OPENAI_COMPAT_RUNTIME_CACHE_NAMESPACE_ENV,
+            "ollama-cloud",
+        );
+        let _provider_id = EnvVarGuard::set(
+            crate::provider_catalog::OPENAI_COMPAT_RUNTIME_PROVIDER_ID_ENV,
+            "ollama-cloud",
+        );
+        let _provider_name = EnvVarGuard::set(
+            crate::provider_catalog::OPENAI_COMPAT_RUNTIME_PROVIDER_NAME_ENV,
+            "Ollama Cloud",
+        );
+        let _features = EnvVarGuard::set(
+            crate::provider_catalog::OPENAI_COMPAT_RUNTIME_PROVIDER_FEATURES_ENV,
+            "0",
+        );
+        let _static_models = EnvVarGuard::set(
+            crate::provider_catalog::OPENAI_COMPAT_RUNTIME_STATIC_MODELS_ENV,
+            "kimi-k2.6:cloud\nllama3.3:cloud",
+        );
+
+        let openrouter =
+            Arc::new(openrouter::OpenRouterProvider::new().expect("openai-compatible provider"));
+        let provider = MultiProvider {
+            claude: RwLock::new(None),
+            anthropic: RwLock::new(None),
+            openai: RwLock::new(None),
+            copilot_api: RwLock::new(None),
+            antigravity: RwLock::new(None),
+            gemini: RwLock::new(None),
+            cursor: RwLock::new(None),
+            openrouter: RwLock::new(Some(openrouter)),
+            active: RwLock::new(ActiveProvider::OpenRouter),
+            use_claude_cli: false,
+            startup_notices: RwLock::new(Vec::new()),
+            forced_provider: Some(ActiveProvider::OpenRouter),
+        };
+
+        let routes = provider.model_routes();
+        assert!(
+            routes.iter().any(|route| route.model == "kimi-k2.6:cloud"
+                && route.provider == "Ollama Cloud"
+                && route.api_method == "openai-compatible"),
+            "routes should include Ollama Cloud static model: {routes:?}"
+        );
+        assert!(
+            !routes.iter().any(|route| route.api_method == "openrouter"),
+            "OpenRouter-only fallback routes should not be injected for Ollama Cloud: {routes:?}"
+        );
+    });
 }
 
 include!("tests/auth_refresh.rs");

@@ -98,6 +98,11 @@ pub trait Provider: Send + Sync {
     /// Get the provider name
     fn name(&self) -> &str;
 
+    /// Get the user-facing provider name.
+    fn display_name(&self) -> String {
+        self.name().to_string()
+    }
+
     /// Get the model identifier being used
     fn model(&self) -> String {
         "unknown".to_string()
@@ -952,6 +957,16 @@ impl Provider for MultiProvider {
         }
     }
 
+    fn display_name(&self) -> String {
+        match self.active_provider() {
+            ActiveProvider::OpenRouter => self
+                .openrouter_provider()
+                .map(|provider| provider.compatible_provider_display_name())
+                .unwrap_or_else(|| "OpenRouter".to_string()),
+            _ => self.name().to_string(),
+        }
+    }
+
     fn model(&self) -> String {
         match self.active_provider() {
             ActiveProvider::Claude => {
@@ -1279,16 +1294,23 @@ impl Provider for MultiProvider {
 
         // OpenRouter models (with per-provider endpoints)
         let has_openrouter = self.openrouter_provider().is_some();
+        let supports_openrouter_provider_features = self
+            .openrouter_provider()
+            .map(|openrouter| openrouter.supports_provider_routing_features())
+            .unwrap_or(false);
         if let Some(openrouter) = self.openrouter_provider() {
             let current_openrouter_model = openrouter.model();
-            let supports_openrouter_provider_features =
-                openrouter.supports_provider_routing_features();
             let mut scheduled_endpoint_refreshes = 0usize;
             for model in openrouter.available_models_display() {
                 openrouter_models += 1;
-                let cached = openrouter::load_endpoints_disk_cache_public(&model);
+                let cached = if supports_openrouter_provider_features {
+                    openrouter::load_endpoints_disk_cache_public(&model)
+                } else {
+                    None
+                };
                 let cache_age = cached.as_ref().map(|(_, age)| *age);
-                if (model == current_openrouter_model || scheduled_endpoint_refreshes < 8)
+                if supports_openrouter_provider_features
+                    && (model == current_openrouter_model || scheduled_endpoint_refreshes < 8)
                     && openrouter.maybe_schedule_endpoint_refresh_for_display(
                         &model,
                         cache_age,
@@ -1357,7 +1379,7 @@ impl Provider for MultiProvider {
         }
 
         // Also add Claude/OpenAI models via openrouter as alternative routes
-        if has_openrouter {
+        if has_openrouter && supports_openrouter_provider_features {
             for model in known_anthropic_model_ids() {
                 let or_model = format!("anthropic/{}", model);
                 if let Some((endpoints, _)) =

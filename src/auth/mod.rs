@@ -26,11 +26,12 @@ pub(crate) use commands::{
 
 pub use status_types::{
     AuthCredentialSource, AuthExpiryConfidence, AuthRefreshSupport, AuthState, AuthStatus,
-    AuthValidationMethod, ProviderAuth, ProviderAuthAssessment,
+    AuthValidationMethod, OpenAiCompatibleAuthStatus, ProviderAuth, ProviderAuthAssessment,
 };
 
-use crate::provider_catalog::LoginProviderAuthStateKey;
-use crate::provider_catalog::LoginProviderDescriptor;
+use crate::provider_catalog::{
+    LoginProviderAuthStateKey, LoginProviderDescriptor, LoginProviderTarget,
+};
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Mutex, RwLock};
@@ -62,6 +63,131 @@ fn env_truthy(key: &str) -> bool {
             !trimmed.is_empty() && trimmed != "0" && !trimmed.eq_ignore_ascii_case("false")
         })
         .unwrap_or(false)
+}
+
+fn compact_provider_label(id: &str) -> String {
+    id.split(['-', '_'])
+        .filter_map(|part| part.chars().next())
+        .collect::<String>()
+        .chars()
+        .take(4)
+        .collect::<String>()
+        .to_lowercase()
+}
+
+fn named_provider_auth_state(profile: &crate::config::NamedProviderConfig) -> AuthState {
+    if matches!(profile.auth, crate::config::NamedProviderAuth::None) {
+        return AuthState::Available;
+    }
+
+    if profile
+        .api_key
+        .as_deref()
+        .map(str::trim)
+        .is_some_and(|key| !key.is_empty())
+    {
+        return AuthState::Available;
+    }
+
+    let Some(api_key_env) = profile
+        .api_key_env
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return AuthState::NotConfigured;
+    };
+
+    if std::env::var(api_key_env)
+        .ok()
+        .map(|value| !value.trim().is_empty())
+        .unwrap_or(false)
+    {
+        return AuthState::Available;
+    }
+
+    if let Some(env_file) = profile
+        .env_file
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        && crate::provider_catalog::load_api_key_from_env_or_config(api_key_env, env_file).is_some()
+    {
+        return AuthState::Available;
+    }
+
+    AuthState::NotConfigured
+}
+
+fn configured_openai_compatible_auth_statuses() -> Vec<OpenAiCompatibleAuthStatus> {
+    let mut statuses = Vec::new();
+
+    for provider in crate::provider_catalog::auth_status_login_providers() {
+        if let LoginProviderTarget::OpenAiCompatible(profile) = provider.target {
+            let resolved = crate::provider_catalog::resolve_openai_compatible_profile(profile);
+            let state = if crate::provider_catalog::openai_compatible_profile_is_configured(profile)
+            {
+                AuthState::Available
+            } else {
+                AuthState::NotConfigured
+            };
+            if state != AuthState::NotConfigured {
+                statuses.push(OpenAiCompatibleAuthStatus {
+                    id: resolved.id.clone(),
+                    display_name: resolved.display_name.clone(),
+                    compact_label: compact_provider_label(&resolved.id),
+                    state,
+                    method_detail: if resolved.requires_api_key {
+                        format!("API key (`{}`)", resolved.api_key_env)
+                    } else {
+                        "local endpoint".to_string()
+                    },
+                });
+            }
+        }
+    }
+
+    let config = crate::config::config();
+    for (name, profile) in &config.providers {
+        if !matches!(
+            profile.provider_type,
+            crate::config::NamedProviderType::OpenAiCompatible
+                | crate::config::NamedProviderType::OpenRouter
+        ) {
+            continue;
+        }
+        let state = named_provider_auth_state(profile);
+        if state == AuthState::NotConfigured {
+            continue;
+        }
+        let display_name = profile
+            .display_name
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or(name)
+            .to_string();
+        statuses.push(OpenAiCompatibleAuthStatus {
+            id: name.clone(),
+            display_name,
+            compact_label: compact_provider_label(name),
+            state,
+            method_detail: profile
+                .api_key_env
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(|env| format!("API key (`{env}`)"))
+                .unwrap_or_else(|| match profile.auth {
+                    crate::config::NamedProviderAuth::None => "no auth".to_string(),
+                    _ => "configured".to_string(),
+                }),
+        });
+    }
+
+    statuses.sort_by(|a, b| a.display_name.cmp(&b.display_name));
+    statuses.dedup_by(|a, b| a.id == b.id);
+    statuses
 }
 
 fn auth_timing_logging_enabled() -> bool {
@@ -129,6 +255,10 @@ impl AuthStatus {
             || self.antigravity == AuthState::Available
             || self.gemini == AuthState::Available
             || self.cursor == AuthState::Available
+            || self
+                .openai_compatible
+                .iter()
+                .any(|status| status.state == AuthState::Available)
     }
 
     pub fn has_any_untrusted_external_auth() -> bool {
@@ -486,13 +616,11 @@ impl AuthStatus {
 
         status.anthropic = anthropic;
 
-        // Check OpenRouter/OpenAI-compatible API keys (env var or config file)
-        let openrouter_available =
-            crate::provider::openrouter::OpenRouterProvider::has_credentials();
-
-        if openrouter_available {
+        // Track real OpenRouter separately from first-class OpenAI-compatible providers.
+        if api_key_available("OPENROUTER_API_KEY", "openrouter.env") {
             status.openrouter = AuthState::Available;
         }
+        status.openai_compatible = configured_openai_compatible_auth_statuses();
 
         status.azure_has_api_key = crate::auth::azure::has_api_key();
         status.azure_uses_entra = crate::auth::azure::uses_entra_id();
@@ -629,11 +757,11 @@ impl AuthStatus {
         timings.push(("anthropic", step_start.elapsed().as_millis()));
 
         let step_start = Instant::now();
-        let openrouter_available =
-            crate::provider::openrouter::OpenRouterProvider::has_credentials();
-        if openrouter_available {
+        // Track real OpenRouter separately from first-class OpenAI-compatible providers.
+        if api_key_available("OPENROUTER_API_KEY", "openrouter.env") {
             status.openrouter = AuthState::Available;
         }
+        status.openai_compatible = configured_openai_compatible_auth_statuses();
         timings.push(("openrouter", step_start.elapsed().as_millis()));
 
         let step_start = Instant::now();
