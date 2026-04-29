@@ -1,6 +1,26 @@
 use super::*;
 
 impl MultiProvider {
+    pub(super) fn spawn_model_refresh(provider: Arc<dyn Provider>, provider_label: &'static str) {
+        let Ok(handle) = tokio::runtime::Handle::try_current() else {
+            return;
+        };
+
+        handle.spawn(async move {
+            match provider.prefetch_models().await {
+                Ok(()) => {
+                    crate::bus::Bus::global().publish_models_updated();
+                }
+                Err(err) => {
+                    crate::logging::info(&format!(
+                        "Failed to refresh {} models in background: {}",
+                        provider_label, err
+                    ));
+                }
+            }
+        });
+    }
+
     pub(super) fn spawn_post_auth_model_refresh(
         provider: Arc<dyn Provider>,
         provider_label: &'static str,
@@ -240,6 +260,7 @@ impl MultiProvider {
 
         result.spawn_anthropic_catalog_refresh_if_needed();
         result.spawn_openai_catalog_refresh_if_needed();
+        result.spawn_openrouter_catalog_refresh_if_needed();
         result.auto_select_active_multi_account();
         crate::logging::info(&format!(
             "[TIMING] provider_init: claude={}, anthropic={}, openai={}, copilot={}, antigravity={}, gemini={}, cursor={}, openrouter={}, total={}ms",
@@ -286,6 +307,13 @@ impl MultiProvider {
             provider_init_start.elapsed().as_millis()
         ));
         result
+    }
+
+    pub(super) fn spawn_openrouter_catalog_refresh_if_needed(&self) {
+        let Some(openrouter) = self.openrouter_provider() else {
+            return;
+        };
+        Self::spawn_model_refresh(openrouter, "OpenRouter/OpenAI-compatible");
     }
 
     pub(super) fn spawn_openai_catalog_refresh_if_needed(&self) {

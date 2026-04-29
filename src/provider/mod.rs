@@ -596,6 +596,7 @@ impl MultiProvider {
     ) -> Result<EventStream> {
         self.spawn_anthropic_catalog_refresh_if_needed();
         self.spawn_openai_catalog_refresh_if_needed();
+        self.spawn_openrouter_catalog_refresh_if_needed();
 
         let detected_active = self.active_provider();
         let active = if let Some(forced) = self.forced_provider {
@@ -1009,6 +1010,7 @@ impl Provider for MultiProvider {
     fn set_model(&self, model: &str) -> Result<()> {
         self.spawn_anthropic_catalog_refresh_if_needed();
         self.spawn_openai_catalog_refresh_if_needed();
+        self.spawn_openrouter_catalog_refresh_if_needed();
 
         let requested_model = model.trim();
         if requested_model.is_empty() {
@@ -1150,6 +1152,7 @@ impl Provider for MultiProvider {
         let routes_started = std::time::Instant::now();
         self.spawn_anthropic_catalog_refresh_if_needed();
         self.spawn_openai_catalog_refresh_if_needed();
+        self.spawn_openrouter_catalog_refresh_if_needed();
 
         let mut routes = Vec::new();
         let mut openrouter_models = 0usize;
