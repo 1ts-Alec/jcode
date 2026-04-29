@@ -486,3 +486,91 @@ pub(super) async fn fetch_copilot_usage_report() -> Option<ProviderUsage> {
         error: None,
     })
 }
+
+#[derive(Debug, Deserialize)]
+struct OllamaUsageWindow {
+    used_pct: f32,
+    resets_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct OllamaUsageResponse {
+    plan: String,
+    session: OllamaUsageWindow,
+    weekly: OllamaUsageWindow,
+}
+
+pub(super) async fn fetch_ollama_cloud_usage_report() -> Option<ProviderUsage> {
+    let api_key = std::env::var("OLLAMA_API_KEY").ok()?;
+    if api_key.is_empty() {
+        return None;
+    }
+
+    let output = match tokio::process::Command::new("ollama-usage")
+        .arg("--json")
+        .env("OLLAMA_API_KEY", &api_key)
+        .output()
+        .await
+    {
+        Ok(output) => output,
+        Err(e) => {
+            return Some(ProviderUsage {
+                provider_name: "Ollama Cloud".to_string(),
+                error: Some(format!("Failed to spawn ollama-usage: {}", e)),
+                ..Default::default()
+            });
+        }
+    };
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Some(ProviderUsage {
+            provider_name: "Ollama Cloud".to_string(),
+            error: Some(format!(
+                "ollama-usage exited with {}: {}",
+                output.status, stderr
+            )),
+            ..Default::default()
+        });
+    }
+
+    let response: OllamaUsageResponse = match serde_json::from_slice(&output.stdout) {
+        Ok(r) => r,
+        Err(e) => {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            return Some(ProviderUsage {
+                provider_name: "Ollama Cloud".to_string(),
+                error: Some(format!(
+                    "Failed to parse ollama-usage output: {} (raw: {})",
+                    e, stdout
+                )),
+                ..Default::default()
+            });
+        }
+    };
+
+    let mut limits = Vec::new();
+    let mut extra_info = Vec::new();
+
+    extra_info.push(("Plan".to_string(), response.plan.clone()));
+
+    limits.push(UsageLimit {
+        name: "Session (5h)".to_string(),
+        usage_percent: response.session.used_pct,
+        resets_at: Some(response.session.resets_at.clone()),
+    });
+
+    limits.push(UsageLimit {
+        name: "Weekly (7d)".to_string(),
+        usage_percent: response.weekly.used_pct,
+        resets_at: Some(response.weekly.resets_at.clone()),
+    });
+
+    Some(ProviderUsage {
+        provider_name: "Ollama Cloud".to_string(),
+        limits,
+        extra_info,
+        hard_limit_reached: false,
+        error: None,
+    })
+}

@@ -814,9 +814,16 @@ fn enqueue_provider_usage_tasks(tasks: &mut tokio::task::JoinSet<Option<Provider
         total += 1;
     }
 
+    if std::env::var("OLLAMA_API_KEY")
+        .map(|s| !s.is_empty())
+        .unwrap_or(false)
+    {
+        tasks.spawn(async { fetch_ollama_cloud_usage_report().await });
+        total += 1;
+    }
+
     total
 }
-
 fn enqueue_anthropic_usage_tasks(tasks: &mut tokio::task::JoinSet<Option<ProviderUsage>>) -> usize {
     let accounts = match auth::claude::list_accounts() {
         Ok(a) if !a.is_empty() => a,
