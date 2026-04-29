@@ -117,6 +117,10 @@ fn shell_command(args: &[String]) -> String {
     }
 }
 
+fn applescript_shell_command(args: &[String]) -> String {
+    applescript_escape(&shell_command(args))
+}
+
 #[cfg(all(unix, not(target_os = "macos")))]
 fn focus_title_best_effort(title: &str) {
     use std::process::{Command, Stdio};
@@ -729,14 +733,19 @@ pub fn spawn_resume_in_new_terminal(
             }
             "iterm2" => {
                 cmd = Command::new("osascript");
+                let command = applescript_shell_command(&[
+                    exe.to_string_lossy().into_owned(),
+                    "--fresh-spawn".to_string(),
+                    "--resume".to_string(),
+                    session_id.to_string(),
+                ]);
                 cmd.args([
                     "-e",
                     &format!(
                         r#"tell application "iTerm2"
-                            create window with default profile command "{} --resume {}"
+                            create window with default profile command "{}"
                         end tell"#,
-                        exe.to_string_lossy(),
-                        session_id
+                        command
                     ),
                 ]);
             }
@@ -860,11 +869,13 @@ pub fn spawn_selfdev_in_new_terminal(
             }
             "iterm2" => {
                 cmd = Command::new("osascript");
-                let command = format!(
-                    "\"{}\" --resume {} self-dev",
-                    applescript_escape(exe.to_string_lossy().as_ref()),
-                    session_id
-                );
+                let command = applescript_shell_command(&[
+                    exe.to_string_lossy().into_owned(),
+                    "--fresh-spawn".to_string(),
+                    "--resume".to_string(),
+                    session_id.to_string(),
+                    "self-dev".to_string(),
+                ]);
                 cmd.args([
                     "-e",
                     &format!(
@@ -878,11 +889,13 @@ pub fn spawn_selfdev_in_new_terminal(
             }
             "terminal" => {
                 cmd = Command::new("osascript");
-                let command = format!(
-                    "\"{}\" --resume {} self-dev",
-                    applescript_escape(exe.to_string_lossy().as_ref()),
-                    session_id
-                );
+                let command = applescript_shell_command(&[
+                    exe.to_string_lossy().into_owned(),
+                    "--fresh-spawn".to_string(),
+                    "--resume".to_string(),
+                    session_id.to_string(),
+                    "self-dev".to_string(),
+                ]);
                 cmd.args([
                     "-e",
                     &format!(
@@ -1273,17 +1286,18 @@ pub fn list_sessions() -> Result<()> {
                 }
                 "iterm2" => {
                     cmd = Command::new("osascript");
+                    let command = applescript_shell_command(
+                        &std::iter::once(program.to_string_lossy().into_owned())
+                            .chain(args.iter().cloned())
+                            .collect::<Vec<_>>(),
+                    );
                     cmd.args([
                         "-e",
                         &format!(
                             r#"tell application "iTerm2"
                                 create window with default profile command "{}"
                             end tell"#,
-                            shell_command(
-                                &std::iter::once(program.to_string_lossy().into_owned())
-                                    .chain(args.iter().cloned())
-                                    .collect::<Vec<_>>()
-                            )
+                            command
                         ),
                     ]);
                 }

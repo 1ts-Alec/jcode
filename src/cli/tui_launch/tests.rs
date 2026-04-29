@@ -1,7 +1,7 @@
 #[cfg(unix)]
 use super::{
-    resumed_window_title, should_show_server_spawning, spawn_resume_in_new_terminal,
-    spawn_selfdev_in_new_terminal,
+    applescript_shell_command, resumed_window_title, should_show_server_spawning,
+    spawn_resume_in_new_terminal, spawn_selfdev_in_new_terminal,
 };
 #[cfg(unix)]
 use crate::platform::set_permissions_executable;
@@ -17,6 +17,17 @@ use std::path::Path;
 use std::thread;
 #[cfg(unix)]
 use std::time::{Duration, Instant};
+
+#[cfg(unix)]
+static SPAWN_ENV_LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+
+#[cfg(unix)]
+fn lock_spawn_env() -> std::sync::MutexGuard<'static, ()> {
+    SPAWN_ENV_LOCK
+        .get_or_init(|| std::sync::Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
 
 #[cfg(unix)]
 struct EnvVarGuard {
@@ -82,7 +93,29 @@ fn wait_for_lines(path: &Path, min_lines: usize) -> Vec<String> {
 
 #[cfg(unix)]
 #[test]
+fn applescript_shell_command_escapes_shell_command_for_string_literals() {
+    let command = applescript_shell_command(&[
+        "/tmp/Jcode Dev/jcode\"bin".to_string(),
+        "--fresh-spawn".to_string(),
+        "--resume".to_string(),
+        "session's odd id".to_string(),
+    ]);
+
+    assert!(
+        command.contains("/tmp/Jcode Dev/jcode\\\"bin"),
+        "embedded double quote must be escaped for AppleScript string literal: {command}"
+    );
+    assert!(
+        command.contains("'session'\\\"'\\\"'s odd id'"),
+        "single quote must remain shell-escaped inside the AppleScript literal: {command}"
+    );
+    assert!(command.contains("--fresh-spawn"));
+}
+
+#[cfg(unix)]
+#[test]
 fn spawn_resume_in_new_terminal_uses_handterm_exec_mode() {
+    let _spawn_guard = lock_spawn_env();
     let temp = tempfile::tempdir().expect("temp dir");
     let output_path = temp.path().join("resume-launch.txt");
     write_fake_handterm(&temp, &output_path);
@@ -103,7 +136,10 @@ fn spawn_resume_in_new_terminal_uses_handterm_exec_mode() {
     assert!(launched);
 
     let lines = wait_for_lines(&output_path, 5);
-    assert_eq!(lines[0], cwd.to_string_lossy());
+    assert_eq!(
+        fs::canonicalize(&lines[0]).expect("canonical launched cwd"),
+        fs::canonicalize(&cwd).expect("canonical expected cwd")
+    );
     assert_eq!(lines[1], "--standalone");
     assert_eq!(lines[2], "--backend");
     assert_eq!(lines[3], "gpu");
@@ -152,6 +188,7 @@ fn resumed_window_title_includes_server_name_when_registry_matches_socket() {
 #[cfg(unix)]
 #[test]
 fn spawn_selfdev_in_new_terminal_uses_handterm_exec_mode() {
+    let _spawn_guard = lock_spawn_env();
     let temp = tempfile::tempdir().expect("temp dir");
     let output_path = temp.path().join("selfdev-launch.txt");
     write_fake_handterm(&temp, &output_path);
@@ -172,7 +209,10 @@ fn spawn_selfdev_in_new_terminal_uses_handterm_exec_mode() {
     assert!(launched);
 
     let lines = wait_for_lines(&output_path, 5);
-    assert_eq!(lines[0], cwd.to_string_lossy());
+    assert_eq!(
+        fs::canonicalize(&lines[0]).expect("canonical launched cwd"),
+        fs::canonicalize(&cwd).expect("canonical expected cwd")
+    );
     assert_eq!(lines[1], "--standalone");
     assert_eq!(lines[2], "--backend");
     assert_eq!(lines[3], "gpu");
