@@ -137,22 +137,20 @@ impl App {
             && active_provider_display_name != active_provider_name;
 
         for model in self.provider.available_models_display() {
-            let (provider, api_method, available, detail) = if model.contains('/') {
-                if active_openai_compatible {
-                    (
-                        active_provider_display_name.clone(),
-                        "openai-compatible".to_string(),
-                        true,
-                        "simplified catalog".to_string(),
-                    )
-                } else {
-                    (
-                        "auto".to_string(),
-                        "openrouter".to_string(),
-                        auth.openrouter != crate::auth::AuthState::NotConfigured,
-                        "simplified catalog".to_string(),
-                    )
-                }
+            let (provider, api_method, available, detail) = if active_openai_compatible {
+                (
+                    active_provider_display_name.clone(),
+                    "openai-compatible".to_string(),
+                    true,
+                    "simplified catalog".to_string(),
+                )
+            } else if model.contains('/') {
+                (
+                    "auto".to_string(),
+                    "openrouter".to_string(),
+                    auth.openrouter != crate::auth::AuthState::NotConfigured,
+                    "simplified catalog".to_string(),
+                )
             } else {
                 match crate::provider::provider_for_model(&model) {
                     Some("claude") => (
@@ -179,23 +177,12 @@ impl App {
                         auth.cursor != crate::auth::AuthState::NotConfigured,
                         String::new(),
                     ),
-                    Some("openrouter") => {
-                        if active_openai_compatible {
-                            (
-                                active_provider_display_name.clone(),
-                                "openai-compatible".to_string(),
-                                true,
-                                "simplified catalog".to_string(),
-                            )
-                        } else {
-                            (
-                                "auto".to_string(),
-                                "openrouter".to_string(),
-                                auth.openrouter != crate::auth::AuthState::NotConfigured,
-                                "simplified catalog".to_string(),
-                            )
-                        }
-                    }
+                    Some("openrouter") => (
+                        "auto".to_string(),
+                        "openrouter".to_string(),
+                        auth.openrouter != crate::auth::AuthState::NotConfigured,
+                        "simplified catalog".to_string(),
+                    ),
                     Some(other) => (other.to_string(), other.to_string(), true, String::new()),
                     None => (
                         active_provider_display_name.clone(),
