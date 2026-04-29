@@ -614,12 +614,9 @@ fn parse_bool_like(value: &str) -> bool {
 
 pub fn openai_compatible_profile_is_configured(profile: OpenAiCompatibleProfile) -> bool {
     let resolved = resolve_openai_compatible_profile(profile);
-    if load_api_key_from_env_or_config(&resolved.api_key_env, &resolved.env_file).is_some() {
-        return true;
-    }
-
     if resolved.requires_api_key {
-        return false;
+        return load_api_key_from_env_or_config(&resolved.api_key_env, &resolved.env_file)
+            .is_some();
     }
 
     if profile.id == OPENAI_COMPAT_PROFILE.id && api_base_uses_localhost(&resolved.api_base) {

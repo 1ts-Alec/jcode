@@ -75,6 +75,139 @@ fn ollama_cloud_profile_has_valid_runtime_defaults() {
 }
 
 #[test]
+fn server_bootstrap_profile_env_survives_auto_provider_init() {
+    let _guard = lock_env();
+    let _env_guard = crate::storage::lock_test_env();
+    let mut saved_keys = vec![
+        "JCODE_PROVIDER_PROFILE_ACTIVE",
+        "JCODE_FORCE_PROVIDER",
+        "JCODE_ACTIVE_PROVIDER",
+        "JCODE_OPENROUTER_API_BASE",
+        "JCODE_OPENROUTER_API_KEY_NAME",
+        "JCODE_OPENROUTER_ENV_FILE",
+        "JCODE_OPENROUTER_CACHE_NAMESPACE",
+        "JCODE_OPENROUTER_PROVIDER_FEATURES",
+    ];
+    saved_keys.extend(
+        provider_catalog::OPENAI_COMPAT_RUNTIME_ENV_PAIRS
+            .iter()
+            .flat_map(|(neutral, legacy)| [*neutral, *legacy]),
+    );
+    let saved: Vec<(String, Option<String>)> = saved_keys
+        .iter()
+        .map(|k| (k.to_string(), std::env::var(k).ok()))
+        .collect();
+
+    crate::env::remove_var("JCODE_PROVIDER_PROFILE_ACTIVE");
+    for (neutral, legacy) in provider_catalog::OPENAI_COMPAT_RUNTIME_ENV_PAIRS {
+        crate::env::remove_var(neutral);
+        crate::env::remove_var(legacy);
+    }
+    provider_catalog::apply_openai_compatible_profile_env(None);
+    apply_login_provider_profile_env(provider_catalog::OLLAMA_CLOUD_LOGIN_PROVIDER);
+    provider_catalog::apply_openai_compatible_profile_env(None);
+
+    assert_eq!(
+        std::env::var("JCODE_PROVIDER_PROFILE_ACTIVE")
+            .ok()
+            .as_deref(),
+        Some("1")
+    );
+    assert_eq!(
+        std::env::var("JCODE_ACTIVE_PROVIDER").ok().as_deref(),
+        Some("openrouter")
+    );
+    assert_eq!(
+        std::env::var("JCODE_OPENROUTER_API_BASE").ok().as_deref(),
+        Some("https://ollama.com/v1")
+    );
+    assert_eq!(
+        std::env::var("JCODE_OPENROUTER_API_KEY_NAME")
+            .ok()
+            .as_deref(),
+        Some("OLLAMA_API_KEY")
+    );
+
+    for (key, value) in saved {
+        if let Some(value) = value {
+            crate::env::set_var(&key, value);
+        } else {
+            crate::env::remove_var(&key);
+        }
+    }
+}
+
+#[tokio::test]
+#[expect(
+    clippy::await_holding_lock,
+    reason = "test env locks intentionally stay held across provider init to isolate process-global runtime env"
+)]
+async fn auto_provider_detection_counts_saved_openai_compatible_credentials() {
+    let _guard = lock_env();
+    let _env_guard = crate::storage::lock_test_env();
+    let dir = TempDir::new().expect("temp dir");
+    let mut saved_keys = vec![
+        "JCODE_HOME",
+        "OPENROUTER_API_KEY",
+        "JCODE_PROVIDER_PROFILE_ACTIVE",
+        "JCODE_NAMED_PROVIDER_PROFILE",
+        "JCODE_PROVIDER_PROFILE_NAME",
+        "JCODE_OPENROUTER_API_BASE",
+        "JCODE_OPENROUTER_API_KEY_NAME",
+        "JCODE_OPENROUTER_ENV_FILE",
+        "JCODE_OPENROUTER_CACHE_NAMESPACE",
+        "JCODE_OPENROUTER_PROVIDER_FEATURES",
+    ];
+    saved_keys.extend(
+        provider_catalog::openai_compatible_profiles()
+            .iter()
+            .map(|profile| profile.api_key_env),
+    );
+    saved_keys.extend(
+        provider_catalog::OPENAI_COMPAT_RUNTIME_ENV_PAIRS
+            .iter()
+            .flat_map(|(neutral, legacy)| [*neutral, *legacy]),
+    );
+    let saved: Vec<(String, Option<String>)> = saved_keys
+        .iter()
+        .map(|k| (k.to_string(), std::env::var(k).ok()))
+        .collect();
+
+    crate::env::set_var("JCODE_HOME", dir.path());
+    crate::env::remove_var("JCODE_PROVIDER_PROFILE_ACTIVE");
+    crate::env::remove_var("JCODE_NAMED_PROVIDER_PROFILE");
+    crate::env::remove_var("JCODE_PROVIDER_PROFILE_NAME");
+    for profile in provider_catalog::openai_compatible_profiles() {
+        crate::env::remove_var(profile.api_key_env);
+    }
+    crate::env::remove_var("OPENROUTER_API_KEY");
+    for (neutral, legacy) in provider_catalog::OPENAI_COMPAT_RUNTIME_ENV_PAIRS {
+        crate::env::remove_var(neutral);
+        crate::env::remove_var(legacy);
+    }
+    provider_catalog::apply_openai_compatible_profile_env(None);
+    save_named_api_key("ollama-cloud.env", "OLLAMA_API_KEY", "test-key")
+        .expect("save ollama cloud key");
+    provider_catalog::apply_openai_compatible_profile_env(None);
+    crate::auth::AuthStatus::invalidate_cache();
+
+    assert!(provider::openrouter::OpenRouterProvider::has_credentials());
+    let availability = detect_auto_provider_flags().await;
+
+    assert!(!availability.has_openrouter);
+    assert!(availability.has_openai_compatible);
+    assert!(availability.has_any_provider());
+
+    for (key, value) in saved {
+        if let Some(value) = value {
+            crate::env::set_var(&key, value);
+        } else {
+            crate::env::remove_var(&key);
+        }
+    }
+}
+
+#[test]
 fn test_server_bootstrap_login_selection_preserves_order() {
     let providers = provider_catalog::server_bootstrap_login_providers();
     assert_eq!(

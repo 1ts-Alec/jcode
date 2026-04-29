@@ -328,6 +328,7 @@ struct AutoProviderAvailability {
     has_gemini: bool,
     has_cursor: bool,
     has_openrouter: bool,
+    has_openai_compatible: bool,
 }
 
 impl AutoProviderAvailability {
@@ -339,7 +340,16 @@ impl AutoProviderAvailability {
             || self.has_gemini
             || self.has_cursor
             || self.has_openrouter
+            || self.has_openai_compatible
     }
+}
+
+fn has_available_openai_compatible_provider(auth_status: &auth::AuthStatus) -> bool {
+    auth_status
+        .openai_compatible
+        .iter()
+        .any(|status| status.state == auth::AuthState::Available)
+        && provider::openrouter::OpenRouterProvider::has_credentials()
 }
 
 async fn detect_auto_provider_flags() -> AutoProviderAvailability {
@@ -352,6 +362,7 @@ async fn detect_auto_provider_flags() -> AutoProviderAvailability {
         has_gemini: auth_status.gemini == auth::AuthState::Available,
         has_cursor: auth_status.cursor == auth::AuthState::Available,
         has_openrouter: auth_status.openrouter == auth::AuthState::Available,
+        has_openai_compatible: has_available_openai_compatible_provider(&auth_status),
         auth_status,
     }
 }
@@ -844,6 +855,8 @@ fn disable_subscription_runtime_mode() {
 pub fn apply_login_provider_profile_env(provider: LoginProviderDescriptor) {
     if let LoginProviderTarget::OpenAiCompatible(profile) = provider.target {
         apply_openai_compatible_profile_env(Some(profile));
+        crate::env::set_var("JCODE_PROVIDER_PROFILE_ACTIVE", "1");
+        lock_model_provider("openrouter");
     }
 }
 
@@ -1259,8 +1272,10 @@ async fn init_provider_with_options(
                     )?;
                 }
 
+                let auth_status = auth::AuthStatus::check_fast();
+                let has_openai_compatible = has_available_openai_compatible_provider(&auth_status);
                 availability = AutoProviderAvailability {
-                    auth_status: auth::AuthStatus::check_fast(),
+                    auth_status,
                     has_claude,
                     has_openai,
                     has_copilot,
@@ -1268,6 +1283,7 @@ async fn init_provider_with_options(
                     has_gemini,
                     has_cursor,
                     has_openrouter,
+                    has_openai_compatible,
                 };
                 crate::logging::info(&format!(
                     "[TIMING] auto_provider_bootstrap: detect={}ms, external_import={}, supplemental={}ms, final_has_any={}",
