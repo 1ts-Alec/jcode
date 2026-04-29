@@ -614,6 +614,43 @@ fn add_cache_breakpoint(messages: &mut [Message]) -> bool {
     false
 }
 
+#[derive(Deserialize)]
+struct OpenAiCompatibleModelsResponse {
+    data: Vec<OpenAiCompatibleModelInfo>,
+}
+
+#[derive(Deserialize)]
+struct OpenAiCompatibleModelInfo {
+    id: String,
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    context_length: Option<u64>,
+    #[serde(default)]
+    pricing: ModelPricing,
+    #[serde(default)]
+    created: Option<u64>,
+}
+
+impl From<OpenAiCompatibleModelInfo> for ModelInfo {
+    fn from(model: OpenAiCompatibleModelInfo) -> Self {
+        let name = model.name.unwrap_or_else(|| model.id.clone());
+        Self {
+            id: model.id,
+            name,
+            context_length: model.context_length,
+            pricing: model.pricing,
+            created: model.created,
+        }
+    }
+}
+
+fn parse_openai_compatible_models_response(value: Value) -> Result<Vec<ModelInfo>> {
+    let response: OpenAiCompatibleModelsResponse =
+        serde_json::from_value(value).context("Failed to parse models response")?;
+    Ok(response.data.into_iter().map(ModelInfo::from).collect())
+}
+
 async fn fetch_models_from_api(
     client: Client,
     api_base: String,
@@ -645,34 +682,31 @@ async fn fetch_models_from_api(
         anyhow::bail!("Model catalog API error ({}): {}", status, body);
     }
 
-    #[derive(Deserialize)]
-    struct ModelsResponse {
-        data: Vec<ModelInfo>,
-    }
-
-    let mut models_response: ModelsResponse = response
-        .json()
-        .await
-        .context("Failed to parse models response")?;
+    let mut models = parse_openai_compatible_models_response(
+        response
+            .json::<Value>()
+            .await
+            .context("Failed to parse models response")?,
+    )?;
 
     if let Some(provider_id) = models_dev_provider_id.as_deref() {
-        enrich_models_dev_model_metadata(&client, &mut models_response.data, provider_id).await;
+        enrich_models_dev_model_metadata(&client, &mut models, provider_id).await;
     }
 
-    save_disk_cache(&models_response.data);
+    save_disk_cache(&models);
 
     if let Some(now) = current_unix_secs() {
         let mut cache = models_cache.write().await;
-        cache.models = models_response.data.clone();
+        cache.models = models.clone();
         cache.fetched = true;
         cache.cached_at = Some(now);
     } else {
         let mut cache = models_cache.write().await;
-        cache.models = models_response.data.clone();
+        cache.models = models.clone();
         cache.fetched = true;
     }
 
-    Ok(models_response.data)
+    Ok(models)
 }
 
 fn models_fingerprint(models: &[ModelInfo]) -> String {

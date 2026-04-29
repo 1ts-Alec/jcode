@@ -283,6 +283,37 @@ fn autodetected_profile_seeds_default_model_and_cache_namespace() {
 }
 
 #[test]
+fn parses_openai_compatible_models_without_openrouter_name_field() {
+    let models = parse_openai_compatible_models_response(serde_json::json!({
+        "object": "list",
+        "data": [
+            {
+                "id": "kimi-k2.6:cloud",
+                "object": "model",
+                "created": 1,
+                "owned_by": "ollama"
+            },
+            {
+                "id": "gpt-oss:120b-cloud",
+                "name": "GPT OSS 120B Cloud",
+                "context_length": 131072
+            }
+        ]
+    }))
+    .expect("parse OpenAI-compatible /models response");
+
+    assert_eq!(models.len(), 2);
+    assert_eq!(models[0].id, "kimi-k2.6:cloud");
+    assert_eq!(
+        models[0].name, "kimi-k2.6:cloud",
+        "name should default to id when providers omit OpenRouter metadata"
+    );
+    assert_eq!(models[0].created, Some(1));
+    assert_eq!(models[1].name, "GPT OSS 120B Cloud");
+    assert_eq!(models[1].context_length, Some(131072));
+}
+
+#[test]
 fn runtime_provider_identity_uses_neutral_display_name() {
     let _lock = ENV_LOCK.lock().unwrap();
     let _runtime = clear_openai_compat_runtime_env();
